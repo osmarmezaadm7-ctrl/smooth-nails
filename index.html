@@ -1178,6 +1178,13 @@ function guardarCliente() {
     clientes.push({ id: 'c' + Date.now(), nombre, apellido: document.getElementById('cl-apellido').value.trim(), tel: document.getElementById('cl-telefono').value.trim(), bday: document.getElementById('cl-bday').value, servicio: document.getElementById('cl-servicio').value, notas: document.getElementById('cl-notas').value.trim(), foto: tempPhotoData || '', pcita: '', visitas: 0 });
   }
   saveData('sn_clientes', clientes);
+  // Guardar también en Sheet
+  if (appsScriptURL) {
+    const cData = editingClienteId ? clientes.find(x=>x.id===editingClienteId) : clientes[clientes.length-1];
+    if (cData) {
+      apiPost({ accion: 'saveCliente', ...cData }).catch(()=>{});
+    }
+  }
   showStatus('cl-status', '✅ Cliente guardada', 'ok');
   setTimeout(() => { closeModal('modal-cliente'); renderClientes(); }, 900);
 }
@@ -1219,14 +1226,74 @@ function seedDemo() {
 // INIT
 // ═══════════════════════════════════════════════════════════
 async function init() {
-  if (!txs.length && !clientes.length) seedDemo();
+  fillTiposSelect(); // defaults mientras carga
 
-  fillTiposSelect(); // Con defaults primero
-
-  // Cargar tipos y dashboard desde Sheet en paralelo
   if (appsScriptURL) {
-    await Promise.all([getTipos(), getDashboard()]);
+    try {
+      // getInit carga todo de una sola llamada
+      const res = await apiGet({ accion: 'getInit' });
+      if (res && res.ok) {
+        // Tipos desde Parametros (fuente de verdad)
+        if (res.tipos && res.tipos.tiposIngreso && res.tipos.tiposIngreso.length) {
+          tiposIngreso = res.tipos.tiposIngreso;
+          tiposEgreso  = res.tipos.tiposEgreso;
+          saveData('sn_tipos_i', tiposIngreso);
+          saveData('sn_tipos_e', tiposEgreso);
+          fillTiposSelect();
+        }
+        // Registros desde Sheet
+        if (res.registros && res.registros.length) {
+          txs = res.registros.map(r => ({
+            ...r,
+            // retrocompatibilidad
+            tipoI: r.tipoI || r.tipo_nombre || '',
+            tipoE: r.tipoE || r.tipo_nombre || '',
+            medioI: r.medio_pago || '',
+            medioE: r.medio_pago || '',
+            obs: r.nota || ''
+          }));
+          saveData('sn_txs', txs);
+        } else if (!txs.length) {
+          txs = loadData('sn_txs', []);
+        }
+        // Clientes desde Sheet
+        if (res.clientes && res.clientes.length) {
+          // Conservar fotos locales al mergear
+          const fotosLocales = {};
+          clientes.forEach(c => { if (c.foto) fotosLocales[c.id] = c.foto; });
+          clientes = res.clientes.map(c => ({ ...c, foto: fotosLocales[c.id] || '' }));
+          saveData('sn_clientes', clientes);
+        } else {
+          clientes = loadData('sn_clientes', []);
+        }
+        // Dashboard
+        if (res.dashboard && res.dashboard.ok) {
+          dashboardData = res.dashboard;
+        }
+        setSyncBadge(true);
+      } else {
+        // Fallback a datos locales
+        txs      = loadData('sn_txs', []);
+        clientes = loadData('sn_clientes', []);
+        tiposIngreso = loadData('sn_tipos_i', TIPOS_INGRESO_DEFAULT);
+        tiposEgreso  = loadData('sn_tipos_e', TIPOS_EGRESO_DEFAULT);
+        fillTiposSelect();
+        setSyncBadge(false);
+      }
+    } catch(e) {
+      txs      = loadData('sn_txs', []);
+      clientes = loadData('sn_clientes', []);
+      tiposIngreso = loadData('sn_tipos_i', TIPOS_INGRESO_DEFAULT);
+      tiposEgreso  = loadData('sn_tipos_e', TIPOS_EGRESO_DEFAULT);
+      fillTiposSelect();
+      setSyncBadge(false);
+    }
   } else {
+    txs      = loadData('sn_txs', []);
+    clientes = loadData('sn_clientes', []);
+    tiposIngreso = loadData('sn_tipos_i', TIPOS_INGRESO_DEFAULT);
+    tiposEgreso  = loadData('sn_tipos_e', TIPOS_EGRESO_DEFAULT);
+    fillTiposSelect();
     setSyncBadge(false);
   }
 
@@ -1238,7 +1305,7 @@ async function init() {
     loading.style.opacity = '0';
     loading.style.transition = 'opacity .3s';
     setTimeout(() => loading.style.display = 'none', 300);
-  }, 600);
+  }, 700);
 }
 
 init();
