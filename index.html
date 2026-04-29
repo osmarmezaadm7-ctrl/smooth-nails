@@ -1196,31 +1196,7 @@ function closeModal(id) { document.getElementById(id).classList.remove('open'); 
 document.querySelectorAll('.modal-bg').forEach(bg => bg.addEventListener('click', e => { if (e.target === bg) bg.classList.remove('open'); }));
 function showStatus(id, msg, type) { const el = document.getElementById(id); el.textContent = msg; el.className = 'status-msg ' + type; el.style.display = 'block'; }
 
-// ═══════════════════════════════════════════════════════════
-// SEED DEMO
-// ═══════════════════════════════════════════════════════════
-function seedDemo() {
-  const d = n => { const dt = new Date(); dt.setDate(dt.getDate()-n); return dt.toISOString().slice(0,10); };
-  clientes = [
-    {id:'c1',nombre:'Katherine',apellido:'Pérez',tel:'+56912345678',bday:'',servicio:'Servicio Manicure',notas:'Le gusta el gel transparente',foto:'',pcita:d(-7),visitas:3},
-    {id:'c2',nombre:'Rocío',apellido:'Romo',tel:'+56987654321',bday:'1998-03-15',servicio:'Servicio Manicure',notas:'Uñas permanentes, colores nude',foto:'',pcita:d(-5),visitas:2},
-    {id:'c3',nombre:'Osmar',apellido:'Meza',tel:'+56911223344',bday:'',servicio:'Servicio Pedicure',notas:'Callos en talones',foto:'',pcita:d(-3),visitas:1},
-    {id:'c4',nombre:'Kathy',apellido:'López',tel:'',bday:'2000-12-01',servicio:'Otro Servicio',notas:'Pestañas, prefiere look natural',foto:'',pcita:'',visitas:1}
-  ];
-  txs = [
-    {id:1,tipo:'Ingreso',fecha:d(1),monto:20000,tipo_nombre:'Servicio Manicure',tipoI:'Servicio Manicure',cliente:'Katherine Pérez',clienteId:'c1',medio_pago:'Efectivo',medioI:'Efectivo',nota:'Uñas acrílicas',obs:'Uñas acrílicas',pcita:d(-7)},
-    {id:2,tipo:'Egreso',fecha:d(3),monto:5000,tipo_nombre:'Compra de insumos',tipoE:'Compra de insumos',proveedor:'Estación Central',medio_pago:'Transferencia',medioE:'Transferencia',nota:'Esmalte Color Rojo',obs:'Esmalte Color Rojo'},
-    {id:3,tipo:'Ingreso',fecha:d(3),monto:20000,tipo_nombre:'Capital de Trabajo',tipoI:'Capital de Trabajo',cliente:'Mami Rosa',clienteId:'',medio_pago:'Efectivo',medioI:'Efectivo',nota:'Donación capital',obs:'Donación capital'},
-    {id:4,tipo:'Ingreso',fecha:d(4),monto:20000,tipo_nombre:'Servicio Manicure',tipoI:'Servicio Manicure',cliente:'Rocío Romo',clienteId:'c2',medio_pago:'Efectivo',medioI:'Efectivo',nota:'Uñas permanentes',obs:'Uñas permanentes',pcita:d(-5)},
-    {id:5,tipo:'Egreso',fecha:d(4),monto:5000,tipo_nombre:'Compra de herramientas de trabajo',tipoE:'Compra de herramientas de trabajo',proveedor:'Estación Central',medio_pago:'Efectivo',medioE:'Efectivo',nota:'Lima',obs:'Lima'},
-    {id:6,tipo:'Ingreso',fecha:d(5),monto:15000,tipo_nombre:'Servicio Pedicure',tipoI:'Servicio Pedicure',cliente:'Osmar Meza',clienteId:'c3',medio_pago:'Transferencia',medioI:'Transferencia',nota:'Callos',obs:'Callos',pcita:d(-3)},
-    {id:7,tipo:'Ingreso',fecha:d(6),monto:15000,tipo_nombre:'Otro Servicio',tipoI:'Otro Servicio',cliente:'Kathy López',clienteId:'c4',medio_pago:'Efectivo',medioI:'Efectivo',nota:'Servicio pestañas',obs:'Servicio pestañas'},
-    {id:8,tipo:'Egreso',fecha:d(7),monto:5000,tipo_nombre:'Transporte',tipoE:'Transporte',proveedor:'Metro',medio_pago:'Efectivo',medioE:'Efectivo',nota:'Recarga Bip',obs:'Recarga Bip'},
-    {id:9,tipo:'Egreso',fecha:d(14),monto:15000,tipo_nombre:'Capacitación',tipoE:'Capacitación',proveedor:'Instituto manos y pies',medio_pago:'Transferencia',medioE:'Transferencia',nota:'Capacitación',obs:'Capacitación'}
-  ];
-  saveData('sn_txs', txs);
-  saveData('sn_clientes', clientes);
-}
+// seedDemo eliminado — app carga siempre desde Sheet
 
 // ═══════════════════════════════════════════════════════════
 // INIT
@@ -1229,6 +1205,9 @@ async function init() {
   fillTiposSelect(); // defaults mientras carga
 
   if (appsScriptURL) {
+    // Limpiar datos locales obsoletos — Sheet es la fuente de verdad
+    localStorage.removeItem('sn_txs');
+    localStorage.removeItem('sn_clientes');
     try {
       // getInit carga todo de una sola llamada
       const res = await apiGet({ accion: 'getInit' });
@@ -1253,8 +1232,10 @@ async function init() {
             obs: r.nota || ''
           }));
           saveData('sn_txs', txs);
-        } else if (!txs.length) {
-          txs = loadData('sn_txs', []);
+        } else {
+          // Sheet vacía — limpiar datos locales para reflejar realidad
+          txs = [];
+          saveData('sn_txs', []);
         }
         // Clientes desde Sheet
         if (res.clientes && res.clientes.length) {
@@ -1264,7 +1245,9 @@ async function init() {
           clientes = res.clientes.map(c => ({ ...c, foto: fotosLocales[c.id] || '' }));
           saveData('sn_clientes', clientes);
         } else {
-          clientes = loadData('sn_clientes', []);
+          // Sheet sin clientes — limpiar local para reflejar realidad
+          clientes = [];
+          saveData('sn_clientes', []);
         }
         // Dashboard
         if (res.dashboard && res.dashboard.ok) {
