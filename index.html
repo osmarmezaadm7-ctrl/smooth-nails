@@ -460,7 +460,7 @@ nav{height:var(--nav-h);background:var(--card);border-top:0.5px solid var(--bord
     </div>
     <div class="form-row">
       <div class="form-group"><label class="form-label">Teléfono</label><input class="form-input" type="tel" id="cl-telefono" placeholder="+56 9..."></div>
-      <div class="form-group"><label class="form-label">Cumpleaños</label><input class="form-input" type="date" id="cl-bday"></div>
+      <div class="form-group"><label class="form-label">Cumpleaños</label><input class="form-input" type="text" id="cl-bday" placeholder="DD/MM/AAAA" maxlength="10" oninput="formatBday(this)"></div>
     </div>
     <div class="form-group">
       <label class="form-label">Servicio favorito</label>
@@ -480,9 +480,13 @@ nav{height:var(--nav-h);background:var(--card);border-top:0.5px solid var(--bord
 const SHEET_ID = '1nBJBh74BJy8BaViEg-WxlyfyC7Bpw2nSWPCCB-iVREo';
 const SHEET_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/edit`;
 
-// Tipos fallback — se sobreescriben si el Apps Script responde
-const TIPOS_INGRESO_DEFAULT = ['Servicio Manicure','Servicio Pedicure','Otro Servicio','Capital de Trabajo'];
+// Tipos fallback — solo se usan si no hay conexión
+const TIPOS_INGRESO_DEFAULT = ['Servicio Manicure','Servicio Pedicure','Otro Servicio','Aportes de Capital'];
 const TIPOS_EGRESO_DEFAULT = ['Compra de insumos','Compra de herramientas de trabajo','Compra de equipo de trabajo','Capacitación','Marketing/Publicidad','Arriendo','Transporte','Devolución','Otros Gastos','Retiro'];
+
+// ── SHEET es la fuente de verdad ──
+// txs y clientes son solo CACHE en memoria, no localStorage
+// Se recargan desde Sheet en cada apertura y después de cada acción
 const DESCRIPCIONES_TIPO = {
   'Servicio Manicure': 'Esmaltado, acrílicas, permanente, nail art',
   'Servicio Pedicure': 'Pedicure spa, esmaltado de pies, callos',
@@ -513,10 +517,15 @@ let currentScreen = 's-inicio';
 let dashboardData = null; // datos desde Sheet
 
 // ═══════════════════════════════════════════════════════════
-// STORAGE
+// STORAGE — localStorage solo para config (URL, tipos, fotos)
+// Los datos de negocio (txs, clientes) vienen SIEMPRE de Sheet
 // ═══════════════════════════════════════════════════════════
 function loadData(k, def) { try { return JSON.parse(localStorage.getItem(k)) || def; } catch(e) { return def; } }
 function saveData(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch(e) {} }
+// Cache en memoria (no persiste entre sesiones — Sheet es la verdad)
+let _cache = {};
+function cacheSet(k, v) { _cache[k] = v; }
+function cacheGet(k, def) { return k in _cache ? _cache[k] : def; }
 
 // ═══════════════════════════════════════════════════════════
 // API — Apps Script
@@ -686,25 +695,13 @@ function renderScreen(id) {
 
 function renderInicio() {
   const m = curMonth();
-  // Preferir datos del dashboard de Sheet si están disponibles y son del mes actual
-  let tI, tE, svcCount;
-  if (dashboardData && dashboardData.mes) {
-    const [dMes, dAnio] = dashboardData.mes.split('/');
-    const now = new Date();
-    if (parseInt(dMes) === now.getMonth()+1 && parseInt(dAnio) === now.getFullYear()) {
-      tI = dashboardData.totalIngresos;
-      tE = dashboardData.totalEgresos;
-      svcCount = dashboardData.countServicios;
-    }
-  }
-  if (tI === undefined) {
-    const mTxs = txs.filter(t => t.fecha.startsWith(m));
-    const ing = mTxs.filter(t => t.tipo === 'Ingreso');
-    const egr = mTxs.filter(t => t.tipo === 'Egreso');
-    tI = ing.reduce((a, t) => a + t.monto, 0);
-    tE = egr.reduce((a, t) => a + t.monto, 0);
-    svcCount = ing.filter(t => t.tipo_nombre && t.tipo_nombre.startsWith('Servicio')).length || ing.filter(t => t.tipoI && t.tipoI.startsWith('Servicio')).length;
-  }
+  // Calcular siempre desde txs locales (refleja tiempo real)
+  const mTxs = txs.filter(t => t.fecha && t.fecha.startsWith(m));
+  const ing = mTxs.filter(t => t.tipo === 'Ingreso');
+  const egr = mTxs.filter(t => t.tipo === 'Egreso');
+  const tI = ing.reduce((a, t) => a + (parseFloat(t.monto)||0), 0);
+  const tE = egr.reduce((a, t) => a + (parseFloat(t.monto)||0), 0);
+  const svcCount = ing.filter(t => (t.tipo_nombre||t.tipoI||'').startsWith('Servicio')).length;
   document.getElementById('bh-amount').textContent = fmt(tI - tE);
   document.getElementById('bh-ing').textContent = fmt(tI);
   document.getElementById('bh-egr').textContent = fmt(tE);
@@ -1109,6 +1106,7 @@ async function guardarMovimiento() {
 
   txs.push(rec);
   saveData('sn_txs', txs);
+  renderInicio(); // actualizar balance inmediatamente
 
   // Enviar a Sheet
   if (appsScriptURL) {
@@ -1122,10 +1120,15 @@ async function guardarMovimiento() {
     showStatus('reg-status', '💾 Guardado localmente — configura la Sheet para sincronizar', 'ok');
   }
 
-  setTimeout(() => {
+  setTimeout(async () => {
     closeModal('modal-registro');
     btn.disabled = false;
     btn.innerHTML = 'Guardar movimiento';
+    // Recargar desde Sheet para mostrar datos reales
+    if (appsScriptURL) {
+      await recargarDesdeSheet();
+      setSyncBadge(true);
+    }
     renderInicio();
     if (currentScreen !== 's-inicio') renderScreen(currentScreen);
   }, 1400);
@@ -1142,7 +1145,7 @@ function openNuevoCliente(editId = null) {
   document.getElementById('cl-nombre').value = c?.nombre || '';
   document.getElementById('cl-apellido').value = c?.apellido || '';
   document.getElementById('cl-telefono').value = c?.tel || '';
-  document.getElementById('cl-bday').value = c?.bday || '';
+  document.getElementById('cl-bday').value = c ? bdayToDisplay(c.bday) : '';
   document.getElementById('cl-servicio').value = c?.servicio || '';
   document.getElementById('cl-notas').value = c?.notas || '';
   const pp = document.getElementById('photo-pick');
@@ -1162,6 +1165,28 @@ function handlePhoto(event) {
   reader.readAsDataURL(file);
 }
 
+function formatBday(input) {
+  let v = input.value.replace(/\D/g,'');
+  if (v.length >= 3) v = v.slice(0,2)+'/'+v.slice(2);
+  if (v.length >= 6) v = v.slice(0,5)+'/'+v.slice(5);
+  input.value = v.slice(0,10);
+}
+
+function bdayToISO(ddmmaaaa) {
+  if (!ddmmaaaa) return '';
+  const p = ddmmaaaa.split('/');
+  if (p.length === 3 && p[2].length === 4) return p[2]+'-'+p[1].padStart(2,'0')+'-'+p[0].padStart(2,'0');
+  return ddmmaaaa; // ya viene en ISO
+}
+
+function bdayToDisplay(iso) {
+  if (!iso) return '';
+  if (iso.includes('/')) return iso; // ya está en formato display
+  const p = iso.split('-');
+  if (p.length === 3) return p[2]+'/'+p[1]+'/'+p[0];
+  return iso;
+}
+
 function guardarCliente() {
   const nombre = document.getElementById('cl-nombre').value.trim();
   if (!nombre) { showStatus('cl-status', 'El nombre es obligatorio', 'err'); return; }
@@ -1170,12 +1195,12 @@ function guardarCliente() {
     c.nombre = nombre;
     c.apellido = document.getElementById('cl-apellido').value.trim();
     c.tel = document.getElementById('cl-telefono').value.trim();
-    c.bday = document.getElementById('cl-bday').value;
+    c.bday = bdayToISO(document.getElementById('cl-bday').value);
     c.servicio = document.getElementById('cl-servicio').value;
     c.notas = document.getElementById('cl-notas').value.trim();
     if (tempPhotoData) c.foto = tempPhotoData;
   } else {
-    clientes.push({ id: 'c' + Date.now(), nombre, apellido: document.getElementById('cl-apellido').value.trim(), tel: document.getElementById('cl-telefono').value.trim(), bday: document.getElementById('cl-bday').value, servicio: document.getElementById('cl-servicio').value, notas: document.getElementById('cl-notas').value.trim(), foto: tempPhotoData || '', pcita: '', visitas: 0 });
+    clientes.push({ id: 'c' + Date.now(), nombre, apellido: document.getElementById('cl-apellido').value.trim(), tel: document.getElementById('cl-telefono').value.trim(), bday: bdayToISO(document.getElementById('cl-bday').value), servicio: document.getElementById('cl-servicio').value, notas: document.getElementById('cl-notas').value.trim(), foto: tempPhotoData || '', pcita: '', visitas: 0 });
   }
   saveData('sn_clientes', clientes);
   // Guardar también en Sheet
@@ -1186,7 +1211,11 @@ function guardarCliente() {
     }
   }
   showStatus('cl-status', '✅ Cliente guardada', 'ok');
-  setTimeout(() => { closeModal('modal-cliente'); renderClientes(); }, 900);
+  setTimeout(async () => {
+    closeModal('modal-cliente');
+    if (appsScriptURL) await recargarDesdeSheet();
+    renderClientes();
+  }, 900);
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -1199,81 +1228,89 @@ function showStatus(id, msg, type) { const el = document.getElementById(id); el.
 // seedDemo eliminado — app carga siempre desde Sheet
 
 // ═══════════════════════════════════════════════════════════
-// INIT
+// INIT — Sheet es la fuente de verdad
 // ═══════════════════════════════════════════════════════════
+async function recargarDesdeSheet() {
+  if (!appsScriptURL) return false;
+  try {
+    const res = await apiGet({ accion: 'getInit' });
+    if (!res || !res.ok) return false;
+
+    // Tipos desde Parametros
+    if (res.tipos && res.tipos.tiposIngreso && res.tipos.tiposIngreso.length) {
+      tiposIngreso = res.tipos.tiposIngreso;
+      tiposEgreso  = res.tipos.tiposEgreso;
+      saveData('sn_tipos_i', tiposIngreso);
+      saveData('sn_tipos_e', tiposEgreso);
+      fillTiposSelect();
+    }
+
+    // Registros — Sheet es la única fuente
+    txs = (res.registros || []).map(r => ({
+      ...r,
+      fecha: normalizarFecha(r.fecha),
+      tipoI: r.tipo === 'Ingreso' ? (r.tipo_nombre || '') : '',
+      tipoE: r.tipo === 'Egreso'  ? (r.tipo_nombre || '') : '',
+      medioI: r.tipo === 'Ingreso' ? (r.medio_pago || '') : '',
+      medioE: r.tipo === 'Egreso'  ? (r.medio_pago || '') : '',
+      obs: r.nota || ''
+    })).filter(r => r.fecha);
+
+    // Clientes — Sheet es la única fuente, conservar fotos locales
+    const fotosLocales = {};
+    clientes.forEach(c => { if (c.foto) fotosLocales[c.id] = c.foto; });
+    clientes = (res.clientes || []).map(c => ({ ...c, foto: fotosLocales[c.id] || '' }));
+
+    // Dashboard
+    if (res.dashboard && res.dashboard.ok) dashboardData = res.dashboard;
+
+    return true;
+  } catch(e) {
+    return false;
+  }
+}
+
+function normalizarFecha(val) {
+  if (!val) return '';
+  const s = val.toString().trim();
+  // YYYY-MM-DD
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+  // DD/MM/YYYY
+  const p = s.split('/');
+  if (p.length === 3 && p[2].length === 4) return p[2] + '-' + p[1].padStart(2,'0') + '-' + p[0].padStart(2,'0');
+  // Date string largo (Wed Apr 29 2026...)
+  try {
+    const dt = new Date(s);
+    if (!isNaN(dt)) {
+      return dt.getFullYear() + '-' +
+             String(dt.getMonth()+1).padStart(2,'0') + '-' +
+             String(dt.getDate()).padStart(2,'0');
+    }
+  } catch(e) {}
+  return '';
+}
+
 async function init() {
   fillTiposSelect(); // defaults mientras carga
 
   if (appsScriptURL) {
-    // Limpiar datos locales obsoletos — Sheet es la fuente de verdad
-    localStorage.removeItem('sn_txs');
-    localStorage.removeItem('sn_clientes');
     try {
-      // getInit carga todo de una sola llamada
-      const res = await apiGet({ accion: 'getInit' });
-      if (res && res.ok) {
-        // Tipos desde Parametros (fuente de verdad)
-        if (res.tipos && res.tipos.tiposIngreso && res.tipos.tiposIngreso.length) {
-          tiposIngreso = res.tipos.tiposIngreso;
-          tiposEgreso  = res.tipos.tiposEgreso;
-          saveData('sn_tipos_i', tiposIngreso);
-          saveData('sn_tipos_e', tiposEgreso);
-          fillTiposSelect();
-        }
-        // Registros desde Sheet
-        if (res.registros && res.registros.length) {
-          txs = res.registros.map(r => ({
-            ...r,
-            // retrocompatibilidad
-            tipoI: r.tipoI || r.tipo_nombre || '',
-            tipoE: r.tipoE || r.tipo_nombre || '',
-            medioI: r.medio_pago || '',
-            medioE: r.medio_pago || '',
-            obs: r.nota || ''
-          }));
-          saveData('sn_txs', txs);
-        } else {
-          // Sheet vacía — limpiar datos locales para reflejar realidad
-          txs = [];
-          saveData('sn_txs', []);
-        }
-        // Clientes desde Sheet
-        if (res.clientes && res.clientes.length) {
-          // Conservar fotos locales al mergear
-          const fotosLocales = {};
-          clientes.forEach(c => { if (c.foto) fotosLocales[c.id] = c.foto; });
-          clientes = res.clientes.map(c => ({ ...c, foto: fotosLocales[c.id] || '' }));
-          saveData('sn_clientes', clientes);
-        } else {
-          // Sheet sin clientes — limpiar local para reflejar realidad
-          clientes = [];
-          saveData('sn_clientes', []);
-        }
-        // Dashboard
-        if (res.dashboard && res.dashboard.ok) {
-          dashboardData = res.dashboard;
-        }
-        setSyncBadge(true);
-      } else {
-        // Fallback a datos locales
-        txs      = loadData('sn_txs', []);
-        clientes = loadData('sn_clientes', []);
+      const ok = await recargarDesdeSheet();
+      setSyncBadge(ok);
+      if (!ok) {
+        // Sin conexión — tipos desde cache
         tiposIngreso = loadData('sn_tipos_i', TIPOS_INGRESO_DEFAULT);
         tiposEgreso  = loadData('sn_tipos_e', TIPOS_EGRESO_DEFAULT);
         fillTiposSelect();
-        setSyncBadge(false);
       }
     } catch(e) {
-      txs      = loadData('sn_txs', []);
-      clientes = loadData('sn_clientes', []);
       tiposIngreso = loadData('sn_tipos_i', TIPOS_INGRESO_DEFAULT);
       tiposEgreso  = loadData('sn_tipos_e', TIPOS_EGRESO_DEFAULT);
       fillTiposSelect();
       setSyncBadge(false);
     }
   } else {
-    txs      = loadData('sn_txs', []);
-    clientes = loadData('sn_clientes', []);
+    // Sin URL configurada — tipos desde cache
     tiposIngreso = loadData('sn_tipos_i', TIPOS_INGRESO_DEFAULT);
     tiposEgreso  = loadData('sn_tipos_e', TIPOS_EGRESO_DEFAULT);
     fillTiposSelect();
