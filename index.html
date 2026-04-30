@@ -475,10 +475,67 @@ nav{height:var(--nav-h);background:var(--card);border-top:0.5px solid var(--bord
       <label class="form-label">Servicio favorito</label>
       <select class="form-select" id="cl-servicio"><option value="">Sin especificar</option></select>
     </div>
+    <div class="form-group"><label class="form-label">Dirección</label><input class="form-input" id="cl-direccion" placeholder="Ej: Las Rosas 123, Santiago"></div>
     <div class="form-group"><label class="form-label">Notas / preferencias</label><input class="form-input" id="cl-notas" placeholder="Ej: le gusta gel, alérgica a..."></div>
     <div class="status-msg" id="cl-status"></div>
     <button class="btn-primary" onclick="guardarCliente()">Guardar cliente</button>
     <button class="btn-secondary" onclick="closeModal('modal-cliente')">Cancelar</button>
+  </div>
+</div>
+
+
+<!-- MODAL CONTACTAR -->
+<div class="modal-bg" id="modal-contactar">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title" id="contactar-nombre">Contactar</div>
+    <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:16px;">
+      <button class="btn-primary" id="btn-llamar" style="background:var(--sage);margin-top:0;" onclick="llamarCliente()">
+        📞 Llamar
+      </button>
+      <button class="btn-primary" id="btn-wsp" onclick="wspCliente()">
+        💬 Enviar WhatsApp
+      </button>
+    </div>
+    <button class="btn-secondary" onclick="closeModal('modal-contactar')">Cancelar</button>
+  </div>
+</div>
+
+<!-- MODAL AGENDAR CITA -->
+<div class="modal-bg" id="modal-agendar">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title">Agendar cita</div>
+    <div class="modal-sub" id="agendar-cliente-nombre">Para el cliente</div>
+
+    <div class="form-group">
+      <label class="form-label">Tipo de servicio</label>
+      <select class="form-select" id="ag-servicio"></select>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Fecha</label>
+        <input class="form-input" type="date" id="ag-fecha">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Hora</label>
+        <input class="form-input" type="time" id="ag-hora" value="10:00">
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Lugar</label>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+        <button class="tgl-btn sel-i" id="ag-btn-estudio" onclick="setLugar('estudio')">🏠 En el estudio</button>
+        <button class="tgl-btn" id="ag-btn-domicilio" onclick="setLugar('domicilio')">🚗 A domicilio</button>
+      </div>
+    </div>
+    <div class="form-group" id="ag-dir-wrap">
+      <label class="form-label">Dirección</label>
+      <input class="form-input" id="ag-direccion" readonly style="color:var(--ink3);">
+    </div>
+    <div class="status-msg" id="ag-status"></div>
+    <button class="btn-primary" onclick="confirmarCita()">✅ Confirmar y enviar WSP</button>
+    <button class="btn-secondary" onclick="closeModal('modal-agendar')">Cancelar</button>
   </div>
 </div>
 
@@ -515,6 +572,9 @@ const DESCRIPCIONES_TIPO = {
 
 // Estado
 let appsScriptURL = localStorage.getItem('sn_script_url') || '';
+let DIRECCION_ESTUDIO = localStorage.getItem('sn_dir_estudio') || 'Las Agatas 2220, San Bernardo';
+let _clienteActivo = null; // cliente seleccionado en modal contactar/agendar
+let _lugarCita = 'estudio'; // 'estudio' o 'domicilio'
 let tiposIngreso = [...TIPOS_INGRESO_DEFAULT];
 let tiposEgreso = [...TIPOS_EGRESO_DEFAULT];
 let txs = loadData('sn_txs', []);
@@ -889,7 +949,8 @@ function verCliente(id) {
     <div class="detail-phone">${escape(c.tel||'Sin teléfono')}</div>
     <div class="detail-actions">
       <button class="action-btn" onclick="openNuevoCliente('${id}')">✏️ Editar</button>
-      <button class="action-btn primary" onclick="openRegistroCliente('${id}')">+ Servicio</button>
+      <button class="action-btn" onclick="contactarCliente('${id}')">📞 Contactar</button>
+      <button class="action-btn primary" onclick="openAgendarCita('${id}')">📅 Agendar</button>
     </div>
     <div class="section"><div class="card">
       <div class="info-row"><span class="info-key">Servicio favorito</span><span class="info-val">${escape(c.servicio||'—')}</span></div>
@@ -1258,6 +1319,7 @@ function openNuevoCliente(editId = null) {
   document.getElementById('cl-bday-dia').value = bdParts[1] || '';
   document.getElementById('cl-bday-mes').value = bdParts[0] || '';
   document.getElementById('cl-servicio').value = c?.servicio || '';
+  document.getElementById('cl-direccion').value = c?.direccion || '';
   document.getElementById('cl-notas').value = c?.notas || '';
   const pp = document.getElementById('photo-pick');
   pp.innerHTML = c?.foto ? `<img src="${c.foto}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">` : '<span>📷</span>';
@@ -1310,10 +1372,12 @@ function guardarCliente() {
     const bdMes = document.getElementById('cl-bday-mes').value;
     c.bday = bdDia && bdMes ? '0000-' + bdMes + '-' + bdDia : '';
     c.servicio = document.getElementById('cl-servicio').value;
+    c.direccion = document.getElementById('cl-direccion').value.trim();
     c.notas = document.getElementById('cl-notas').value.trim();
     if (tempPhotoData) c.foto = tempPhotoData;
   } else {
-    clientes.push({ id: 'c' + Date.now(), nombre, apellido: document.getElementById('cl-apellido').value.trim(), tel: document.getElementById('cl-telefono').value.trim(), bday: (()=>{ const d=document.getElementById('cl-bday-dia').value; const m=document.getElementById('cl-bday-mes').value; return d&&m?'0000-'+m+'-'+d:''; })(), servicio: document.getElementById('cl-servicio').value, notas: document.getElementById('cl-notas').value.trim(), foto: tempPhotoData || '', pcita: '', visitas: 0 });
+    clientes.push({ id: 'c' + Date.now(), nombre, apellido: document.getElementById('cl-apellido').value.trim(), tel: document.getElementById('cl-telefono').value.trim(), bday: (()=>{ const d=document.getElementById('cl-bday-dia').value; const m=document.getElementById('cl-bday-mes').value; return d&&m?'0000-'+m+'-'+d:''; })(), servicio: document.getElementById('cl-servicio').value, direccion: document.getElementById('cl-direccion').value.trim(),
+      notas: document.getElementById('cl-notas').value.trim(), foto: tempPhotoData || '', pcita: '', visitas: 0 });
   }
   // datos en memoria — Sheet se sincroniza abajo
   // Cerrar modal inmediatamente — sincronizar Sheet en background
@@ -1405,8 +1469,180 @@ async function recargarDesdeSheet() {
 }
 
 
+// ═══════════════════════════════════════════════════════════
+// CONTACTAR CLIENTE
+// ═══════════════════════════════════════════════════════════
+function contactarCliente(id) {
+  const c = clientes.find(x => x.id === id);
+  if (!c) return;
+  _clienteActivo = c;
+  const tel = limpiarTel(c.tel);
+  document.getElementById('contactar-nombre').textContent = fullName(c);
+  document.getElementById('btn-llamar').style.display = tel ? 'block' : 'none';
+  document.getElementById('btn-wsp').style.display = tel ? 'block' : 'none';
+  if (!tel) {
+    document.getElementById('contactar-nombre').textContent = fullName(c) + ' — Sin teléfono registrado';
+  }
+  document.getElementById('modal-contactar').classList.add('open');
+}
+
+function limpiarTel(tel) {
+  if (!tel) return '';
+  // Limpiar y asegurar formato internacional
+  let t = tel.toString().replace(/\s+/g, '').replace(/[^0-9+]/g, '');
+  if (t.startsWith('0')) t = '+56' + t.slice(1);
+  if (!t.startsWith('+') && !t.startsWith('56')) t = '+56' + t;
+  if (t.startsWith('56') && !t.startsWith('+')) t = '+' + t;
+  return t;
+}
+
+function llamarCliente() {
+  if (!_clienteActivo) return;
+  const tel = limpiarTel(_clienteActivo.tel);
+  if (!tel) return;
+  window.location.href = 'tel:' + tel;
+  closeModal('modal-contactar');
+}
+
+function wspCliente() {
+  if (!_clienteActivo) return;
+  const tel = limpiarTel(_clienteActivo.tel);
+  if (!tel) return;
+  const msg = encodeURIComponent(`Hola ${_clienteActivo.nombre} 💅 Te escribo desde Smooth Nails. ¿En qué te puedo ayudar?`);
+  window.open(`https://wa.me/${tel.replace('+','')}?text=${msg}`, '_blank');
+  closeModal('modal-contactar');
+}
+
+// ═══════════════════════════════════════════════════════════
+// AGENDAR CITA
+// ═══════════════════════════════════════════════════════════
+function openAgendarCita(id) {
+  const c = clientes.find(x => x.id === id);
+  if (!c) return;
+  _clienteActivo = c;
+  _lugarCita = 'estudio';
+
+  document.getElementById('agendar-cliente-nombre').textContent = 'Para ' + fullName(c);
+
+  // Poblar tipos de servicio
+  const sel = document.getElementById('ag-servicio');
+  sel.innerHTML = tiposIngreso.filter(t => esServicio(t)).map(t => `<option value="${t}">${t}</option>`).join('');
+  if (c.servicio) sel.value = c.servicio;
+
+  // Fecha por defecto: mañana
+  const manana = new Date();
+  manana.setDate(manana.getDate() + 1);
+  document.getElementById('ag-fecha').value = manana.toISOString().slice(0,10);
+  document.getElementById('ag-hora').value = '10:00';
+
+  // Dirección estudio por defecto
+  setLugar('estudio');
+
+  document.getElementById('ag-status').style.display = 'none';
+  document.getElementById('modal-agendar').classList.add('open');
+}
+
+function setLugar(lugar) {
+  _lugarCita = lugar;
+  document.getElementById('ag-btn-estudio').className = 'tgl-btn' + (lugar === 'estudio' ? ' sel-i' : '');
+  document.getElementById('ag-btn-domicilio').className = 'tgl-btn' + (lugar === 'domicilio' ? ' sel-i' : '');
+
+  const dirInput = document.getElementById('ag-direccion');
+  if (lugar === 'estudio') {
+    dirInput.value = DIRECCION_ESTUDIO;
+    dirInput.readOnly = true;
+    dirInput.style.color = 'var(--ink3)';
+  } else {
+    const dir = _clienteActivo?.direccion || '';
+    dirInput.value = dir || 'Sin dirección registrada — edita el perfil del cliente';
+    dirInput.readOnly = !dir;
+    dirInput.style.color = dir ? 'var(--ink)' : 'var(--ink3)';
+  }
+}
+
+async function confirmarCita() {
+  const fecha = document.getElementById('ag-fecha').value;
+  const hora  = document.getElementById('ag-hora').value;
+  const svc   = document.getElementById('ag-servicio').value;
+  const dir   = document.getElementById('ag-direccion').value;
+
+  if (!fecha || !hora || !svc) {
+    showStatus('ag-status', '⚠️ Por favor completa todos los campos', 'err');
+    return;
+  }
+  if (!_clienteActivo?.tel) {
+    showStatus('ag-status', '⚠️ El cliente no tiene teléfono registrado', 'err');
+    return;
+  }
+
+  // Formatear fecha para mostrar
+  const fechaD = new Date(fecha + 'T12:00:00');
+  const fechaStr = fechaD.toLocaleDateString('es-CL', { weekday:'long', day:'numeric', month:'long' });
+  const [hh, mm] = hora.split(':');
+  const horaStr = `${hh}:${mm} hrs`;
+  const lugarStr = _lugarCita === 'estudio' ? `el estudio (${dir})` : `tu domicilio (${dir})`;
+
+  // Actualizar próxima cita en Sheet
+  if (appsScriptURL) {
+    try {
+      await apiPost({
+        accion: 'saveCliente',
+        ..._clienteActivo,
+        pcita: fecha
+      });
+      // Actualizar localmente
+      const idx = clientes.findIndex(x => x.id === _clienteActivo.id);
+      if (idx >= 0) {
+        clientes[idx].pcita = fecha;
+        _clienteActivo.pcita = fecha;
+      }
+    } catch(e) {}
+  }
+
+  // Construir mensaje WhatsApp
+  const tel = limpiarTel(_clienteActivo.tel);
+  const msg = encodeURIComponent(
+    `Hola ${_clienteActivo.nombre} 💅
+
+` +
+    `¡Tu cita está confirmada!
+
+` +
+    `📅 *${fechaStr}*
+` +
+    `🕐 *${horaStr}*
+` +
+    `💅 *${svc}*
+` +
+    `📍 *${_lugarCita === 'estudio' ? 'Smooth Nails Studio' : 'A domicilio'}*
+` +
+    `${dir}
+
+` +
+    `Si necesitas reagendar o tienes alguna consulta, no dudes en escribirme 🌸
+` +
+    `— Martina, Smooth Nails`
+  );
+
+  closeModal('modal-agendar');
+  renderInicio();
+  window.open(`https://wa.me/${tel.replace('+','')}?text=${msg}`, '_blank');
+}
+
+async function getParamsFromSheet() {
+  if (!appsScriptURL) return;
+  try {
+    const res = await apiGet({ accion: 'getParametros' });
+    if (res && res.direccionEstudio) {
+      DIRECCION_ESTUDIO = res.direccionEstudio;
+      localStorage.setItem('sn_dir_estudio', DIRECCION_ESTUDIO);
+    }
+  } catch(e) {}
+}
+
 async function init() {
   fillTiposSelect(); // defaults mientras carga
+  getParamsFromSheet(); // cargar dirección del estudio
 
   if (appsScriptURL) {
     try {
