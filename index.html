@@ -739,6 +739,12 @@ document.getElementById('fab-btn').addEventListener('click', () => {
 // ═══════════════════════════════════════════════════════════
 // RENDER
 // ═══════════════════════════════════════════════════════════
+// Determina si un tipo de movimiento es un servicio (para conteo)
+function esServicio(tipoNombre) {
+  if (!tipoNombre) return false;
+  const t = tipoNombre.toLowerCase();
+  return t.startsWith('servicio') || t.includes('servicio') || t === 'otro servicio';
+}
 function renderScreen(id) {
   if (id === 's-inicio') renderInicio();
   else if (id === 's-registros') renderRegistros();
@@ -750,12 +756,15 @@ function renderScreen(id) {
 function renderInicio() {
   const m = curMonth();
   // Calcular siempre desde txs locales (refleja tiempo real)
-  const mTxs = txs.filter(t => t.fecha && t.fecha.startsWith(m));
+  const mTxs = txs.filter(t => {
+    const fechaISO = normalizarFecha((t.fecha||'').toString());
+    return fechaISO && fechaISO.startsWith(m);
+  });
   const ing = mTxs.filter(t => t.tipo === 'Ingreso');
   const egr = mTxs.filter(t => t.tipo === 'Egreso');
   const tI = ing.reduce((a, t) => a + (parseFloat(t.monto)||0), 0);
   const tE = egr.reduce((a, t) => a + (parseFloat(t.monto)||0), 0);
-  const svcCount = ing.filter(t => (t.tipo_nombre||t.tipoI||'').startsWith('Servicio')).length;
+  const svcCount = ing.filter(t => esServicio(t.tipo_nombre||t.tipoI||'')).length;
   document.getElementById('bh-amount').textContent = fmt(tI - tE);
   document.getElementById('bh-ing').textContent = fmt(tI);
   document.getElementById('bh-egr').textContent = fmt(tE);
@@ -768,8 +777,8 @@ function renderInicio() {
   const upcoming = clientes
     .map(c => ({ ...c, _pcitaISO: normalizarFecha((c.pcita||'').toString()) }))
     .filter(c => c._pcitaISO && c._pcitaISO >= todayISO)
-    .sort((a,b) => a._pcitaISO.localeCompare(b._pcitaISO))
-    .slice(0, 3);
+    .sort((a,b) => a._pcitaISO.localeCompare(b._pcitaISO)) // más próxima primero
+    .slice(0, 5); // mostrar hasta 5 citas próximas
   const citasEl = document.getElementById('proximas-list');
   citasEl.innerHTML = upcoming.length
     ? upcoming.map(c => `<div class="tx-item" style="cursor:pointer" onclick="verCliente('${c.id}')">
@@ -794,7 +803,11 @@ function renderRegistros() {
   if (!months.includes(sel)) sel = months[0];
   tabsEl.innerHTML = months.map(m => `<button class="period-tab${m===sel?' active':''}" onclick="setRegMonth('${m}')">${monthLabel(m)}</button>`).join('');
   tabsEl.dataset.sel = sel;
-  renderTxList('full-list', txs.filter(t => t.fecha.startsWith(sel)).reverse());
+  const regFiltrados = txs.filter(t => {
+    const fechaISO = normalizarFecha((t.fecha||'').toString());
+    return fechaISO && fechaISO.startsWith(sel);
+  });
+  renderTxList('full-list', regFiltrados);
 }
 function setRegMonth(m) { document.getElementById('reg-tabs').dataset.sel = m; renderRegistros(); }
 
@@ -962,7 +975,7 @@ function renderReportes() {
       <div class="stat-card"><div class="stat-label">Ingresos</div><div class="stat-val green">${fmt(tI)}</div><div class="stat-sub">${ing.length} mov.</div></div>
       <div class="stat-card"><div class="stat-label">Egresos</div><div class="stat-val red">${fmt(tE)}</div><div class="stat-sub">${egr.length} mov.</div></div>
       <div class="stat-card"><div class="stat-label">Utilidad</div><div class="stat-val" style="color:${tI-tE>=0?'var(--sage)':'var(--rose)'}">${fmt(tI-tE)}</div><div class="stat-sub">${tI>0?Math.round((tI-tE)/tI*100)+'% margen':'—'}</div></div>
-      <div class="stat-card"><div class="stat-label">Servicios</div><div class="stat-val">${ing.filter(t=>(t.tipo_nombre||t.tipoI||'').startsWith('Servicio')).length}</div><div class="stat-sub">este mes</div></div>
+      <div class="stat-card"><div class="stat-label">Servicios</div><div class="stat-val">${ing.filter(t=>esServicio(t.tipo_nombre||t.tipoI||'')).length}</div><div class="stat-sub">este mes</div></div>
     </div>
     <div class="card" style="margin-bottom:10px;">
       <div style="font-size:12px;font-weight:600;color:var(--ink3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:14px;">Ingresos por tipo</div>
