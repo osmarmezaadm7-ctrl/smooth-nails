@@ -1298,21 +1298,25 @@ async function guardarMovimiento() {
   }
 
   // ── Optimistic UI: mostrar inmediatamente sin esperar Sheet ──
-  txs.unshift(rec); // agregar al inicio — el más reciente va primero
+  txs.unshift(rec);
   renderInicio();
   renderScreen(currentScreen);
 
-  // Cerrar modal de inmediato
-  closeModal('modal-registro');
-  btn.disabled = false;
-  btn.innerHTML = 'Guardar movimiento';
+  // Mostrar confirmación visual breve antes de cerrar
+  showStatus('reg-status', '✅ ¡Registrado!', 'ok');
+  document.getElementById('reg-status').style.display = 'block';
 
-  // Sincronizar con Sheet en segundo plano (sin bloquear la UI)
+  setTimeout(() => {
+    closeModal('modal-registro');
+    btn.disabled = false;
+    btn.innerHTML = 'Guardar movimiento';
+  }, 800);
+
+  // Sincronizar con Sheet en segundo plano
   if (appsScriptURL) {
     addMovimiento(rec).then(async resultado => {
       if (resultado) {
         setSyncBadge(true);
-        // Recargar silenciosamente para sincronizar con Sheet
         await recargarDesdeSheet();
         renderInicio();
         if (currentScreen !== 's-inicio') renderScreen(currentScreen);
@@ -1399,8 +1403,6 @@ function guardarCliente() {
       notas: document.getElementById('cl-notas').value.trim(), foto: tempPhotoData || '', pcita: '', visitas: 0 });
   }
   // datos en memoria — Sheet se sincroniza abajo
-  // Cerrar modal inmediatamente — sincronizar Sheet en background
-  closeModal('modal-cliente');
   renderClientes();
 
   if (appsScriptURL) {
@@ -1408,11 +1410,21 @@ function guardarCliente() {
       ? clientes.find(x => x.id === editingClienteId)
       : clientes[clientes.length - 1];
     if (cData) {
-      apiPost({ accion: 'saveCliente', ...cData }).then(async () => {
+      showStatus('cl-status', '⏳ Guardando...', 'ok');
+      apiPost({ accion: 'saveCliente', ...cData }).then(async res => {
+        showStatus('cl-status', '✅ Cliente guardada en Google Sheets', 'ok');
         await recargarDesdeSheet();
         renderClientes();
-      }).catch(() => {});
+        // Cerrar modal solo cuando Sheet confirmó
+        setTimeout(() => closeModal('modal-cliente'), 1200);
+      }).catch(() => {
+        showStatus('cl-status', '💾 Guardada localmente — sin conexión a Sheet', 'err');
+        setTimeout(() => closeModal('modal-cliente'), 1500);
+      });
     }
+  } else {
+    showStatus('cl-status', '💾 Guardada localmente', 'ok');
+    setTimeout(() => closeModal('modal-cliente'), 1000);
   }
 }
 
@@ -1561,9 +1573,10 @@ function abrirWSP(tel, msg) {
 // AGENDAR CITA
 // ═══════════════════════════════════════════════════════════
 function openAgendarCita(id, isReagendar = false) {
+  // Siempre buscar el cliente más fresco del array
   const c = clientes.find(x => x.id === id);
   if (!c) return;
-  _clienteActivo = c;
+  _clienteActivo = { ...c }; // copia para evitar referencias obsoletas
   _lugarCita = 'estudio';
 
   // Título del modal
@@ -1608,10 +1621,19 @@ function setLugar(lugar) {
     dirInput.readOnly = true;
     dirInput.style.color = 'var(--ink3)';
   } else {
-    const dir = _clienteActivo?.direccion || '';
-    dirInput.value = dir || 'Sin dirección registrada — edita el perfil del cliente';
-    dirInput.readOnly = !dir;
-    dirInput.style.color = dir ? 'var(--ink)' : 'var(--ink3)';
+    // Siempre buscar el cliente fresco desde el array clientes (puede haberse actualizado desde Sheet)
+    const clienteFresco = _clienteActivo ? clientes.find(x => x.id === _clienteActivo.id) : null;
+    const dir = (clienteFresco?.direccion || _clienteActivo?.direccion || '').trim();
+    if (dir) {
+      dirInput.value = dir;
+      dirInput.readOnly = false;
+      dirInput.style.color = 'var(--ink)';
+    } else {
+      dirInput.value = '';
+      dirInput.readOnly = false;
+      dirInput.placeholder = 'Sin dirección — puedes escribirla aquí';
+      dirInput.style.color = 'var(--ink)';
+    }
   }
 }
 
@@ -1679,9 +1701,12 @@ async function confirmarCita() {
     `— Martina, Smooth Nails`
   );
 
-  closeModal('modal-agendar');
-  renderInicio();
-  abrirWSP(tel, msg);
+  showStatus('ag-status', '✅ Cita agendada — abriendo WhatsApp...', 'ok');
+  setTimeout(() => {
+    closeModal('modal-agendar');
+    renderInicio();
+    abrirWSP(tel, msg);
+  }, 800);
 }
 
 async function cancelarCita(id) {
