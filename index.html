@@ -1403,6 +1403,22 @@ function bdayToDisplay(iso) {
   return iso;
 }
 
+// Recarga solo clientes (más rápido que getInit completo)
+async function recargarClientes() {
+  if (!appsScriptURL) return;
+  try {
+    const res = await apiGet({ accion: 'getClientes' });
+    if (res && res.ok && res.clientes) {
+      const fotosLocales = {};
+      clientes.forEach(c => { if (c.foto && c.foto.startsWith('data:')) fotosLocales[c.id] = c.foto; });
+      clientes = res.clientes.map(c => ({
+        ...c,
+        foto: (c.foto && c.foto.startsWith('data:')) ? c.foto : (fotosLocales[c.id] || '')
+      }));
+    }
+  } catch(e) {}
+}
+
 async function guardarCliente() {
   const nombre = document.getElementById('cl-nombre').value.trim();
   if (!nombre) { showStatus('cl-status', 'El nombre es obligatorio', 'err'); return; }
