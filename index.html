@@ -947,15 +947,16 @@ function verCliente(id) {
     <div class="detail-avatar-big">${c.foto ? `<img src="${c.foto}">` : (initials(c)||'👤')}</div>
     <div class="detail-name">${escape(fullName(c))}</div>
     <div class="detail-phone">${escape(c.tel||'Sin teléfono')}</div>
-    <div class="detail-actions" style="flex-wrap:wrap;">
+    <div class="detail-actions" style="flex-wrap:wrap;gap:8px;">
       <button class="action-btn" onclick="openNuevoCliente('${id}')">✏️ Editar</button>
       <button class="action-btn" onclick="contactarCliente('${id}')">📞 Contactar</button>
       ${(()=>{
         const pcitaISO = normalizarFecha((c.pcita||'').toString());
         const tieneCita = pcitaISO && pcitaISO >= today();
-        return tieneCita
-          ? `<button class="action-btn primary" style="flex:2;" onclick="openAgendarCita('${id}', true)">🔄 Reagendar</button>`
-          : `<button class="action-btn primary" style="flex:2;" onclick="openAgendarCita('${id}', false)">📅 Agendar</button>`;
+        if (tieneCita) return `
+          <button class="action-btn primary" style="flex:2;background:var(--sage);" onclick="openAgendarCita('${id}', true)">🔄 Reagendar</button>
+          <button class="action-btn" style="flex:2;color:var(--rose-d);border-color:var(--rose-m);" onclick="cancelarCita('${id}')">❌ Cancelar cita</button>`;
+        return `<button class="action-btn primary" style="flex:2;" onclick="openAgendarCita('${id}', false)">📅 Agendar</button>`;
       })()}
     </div>
     <div class="section"><div class="card">
@@ -970,7 +971,11 @@ function verCliente(id) {
       <div class="section-hd"><span class="section-tt">Fotos de trabajos</span><button class="section-lk" onclick="addFoto('${id}')">+ Añadir</button></div>
       <input type="file" id="foto-file-${id}" accept="image/*" style="display:none" onchange="handleFotoTrabajo(event,'${id}')">
       <div class="photo-grid" id="photo-grid-${id}">
-        ${fotos.map(f=>`<div class="photo-thumb"><img src="${f}"></div>`).join('')}
+        ${fotos.map((f,i)=>`
+          <div class="photo-thumb" style="position:relative;">
+            <img src="${f}">
+            <button onclick="eliminarFoto('${id}',${i})" style="position:absolute;top:4px;right:4px;width:22px;height:22px;border-radius:50%;background:rgba(0,0,0,.6);color:white;border:none;font-size:13px;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1;">×</button>
+          </div>`).join('')}
         <div class="photo-thumb photo-add" onclick="addFoto('${id}')">+</div>
       </div>
     </div>
@@ -989,6 +994,14 @@ function verCliente(id) {
 }
 
 function addFoto(id) { document.getElementById('foto-file-' + id).click(); }
+
+function eliminarFoto(clienteId, index) {
+  if (!confirm('¿Eliminar esta foto?')) return;
+  const fotos = loadData('sn_fotos_' + clienteId, []);
+  fotos.splice(index, 1);
+  saveData('sn_fotos_' + clienteId, fotos);
+  verCliente(clienteId);
+}
 function handleFotoTrabajo(event, id) {
   const file = event.target.files[0];
   if (!file) return;
@@ -1441,10 +1454,19 @@ async function recargarDesdeSheet() {
       obs: r.nota || ''
     })).filter(r => r.fecha);
 
-    // Clientes — Sheet es la única fuente, conservar fotos locales
-    const fotosLocales = {};
-    clientes.forEach(c => { if (c.foto) fotosLocales[c.id] = c.foto; });
-    const clientesBase = (res.clientes || []).map(c => ({ ...c, foto: fotosLocales[c.id] || '' }));
+    // Clientes — Sheet es fuente de verdad
+    // Conservar fotos locales (no se guardan en Sheet por tamaño)
+    const datosLocales = {};
+    clientes.forEach(c => {
+      datosLocales[c.id] = {
+        foto: c.foto || ''  // solo fotos son locales
+      };
+    });
+    const clientesBase = (res.clientes || []).map(c => ({
+      ...c,
+      // foto: Sheet primero, si no hay usar local
+      foto: (c.foto && c.foto.length > 10) ? c.foto : (datosLocales[c.id]?.foto || '')
+    }));
 
     // Enriquecer pcita desde registros si la hoja Clientes no la tiene
     const registros = res.registros || [];
@@ -1660,6 +1682,42 @@ async function confirmarCita() {
   closeModal('modal-agendar');
   renderInicio();
   abrirWSP(tel, msg);
+}
+
+async function cancelarCita(id) {
+  const c = clientes.find(x => x.id === id);
+  if (!c) return;
+  const pcitaISO = normalizarFecha((c.pcita||'').toString());
+  if (!confirm(`¿Cancelar la cita del ${fmtDLong(pcitaISO)} para ${fullName(c)}?`)) return;
+
+  // Limpiar pcita en Sheet
+  if (appsScriptURL) {
+    try {
+      await apiPost({ accion: 'saveCliente', ...c, pcita: '' });
+    } catch(e) {}
+  }
+
+  // Actualizar localmente
+  const idx = clientes.findIndex(x => x.id === id);
+  if (idx >= 0) clientes[idx].pcita = '';
+
+  // Enviar WSP de cancelación si tiene teléfono
+  if (c.tel) {
+    const enviar = confirm(`¿Avisar a ${c.nombre} por WhatsApp sobre la cancelación?`);
+    if (enviar) {
+      const tel = limpiarTel(c.tel);
+      const msg = encodeURIComponent(
+        `Hola ${c.nombre} 💅\n\n` +
+        `Te informamos que tu cita del *${fmtDLong(pcitaISO)}* ha sido cancelada.\n\n` +
+        `Para reagendar, no dudes en escribirnos 🌸\n` +
+        `— Martina, Smooth Nails`
+      );
+      abrirWSP(tel, msg);
+    }
+  }
+
+  renderInicio();
+  verCliente(id);
 }
 
 async function getParamsFromSheet() {
