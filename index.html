@@ -1703,24 +1703,9 @@ async function recargarDesdeSheet() {
       };
     });
 
-    // Enriquecer pcita desde registros si la hoja Clientes no la tiene
-    const registros = res.registros || [];
-    clientes = clientesBase.map(c => {
-      if (c.pcita && c.pcita.trim()) return c; // ya tiene cita en Sheet
-      const nombreC = (c.nombre + ' ' + (c.apellido||'')).trim().toLowerCase();
-      const nombreSimple = c.nombre.trim().toLowerCase();
-      // Buscar la próxima cita más reciente en registros
-      const citasRegistros = registros
-        .filter(r => {
-          const tc = (r.cliente||'').trim().toLowerCase();
-          return (tc === nombreC || tc === nombreSimple) && r.pcita && r.pcita.trim();
-        })
-        .map(r => normalizarFecha(r.pcita))
-        .filter(f => f >= today())
-        .sort();
-      if (citasRegistros.length) return { ...c, pcita: citasRegistros[0] };
-      return c;
-    });
+    // La hoja Clientes es la fuente de verdad para pcita
+    // Si está vacía = sin cita (puede haber sido cancelada) — NO buscar en registros
+    clientes = clientesBase;
 
     // Dashboard
     if (res.dashboard && res.dashboard.ok) dashboardData = res.dashboard;
