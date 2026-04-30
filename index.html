@@ -187,9 +187,9 @@ nav{height:var(--nav-h);background:var(--card);border-top:0.5px solid var(--bord
 .dot.gray{background:var(--ink3);}
 /* Ayuda tooltip */
 .help-btn{width:18px;height:18px;border-radius:50%;background:var(--ink3);color:white;border:none;font-size:11px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;}
-.tooltip{display:none;position:absolute;bottom:calc(100% + 6px);left:0;right:0;background:var(--ink);color:white;font-size:12px;line-height:1.5;padding:10px 12px;border-radius:10px;z-index:400;font-weight:400;}
+.tooltip{display:none;position:fixed;left:16px;right:16px;background:var(--ink);color:white;font-size:13px;line-height:1.6;padding:12px 14px;border-radius:12px;z-index:500;font-weight:400;box-shadow:0 4px 20px rgba(0,0,0,.25);}
 .tooltip.open{display:block;}
-.tooltip-wrap{position:relative;}
+.tooltip-wrap{position:relative;display:inline-flex;align-items:center;}
 /* LOADING */
 .loading-overlay{position:fixed;inset:0;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:500;gap:16px;}
 .loading-logo{font-family:var(--fs);font-size:28px;color:var(--ink);}
@@ -367,7 +367,7 @@ nav{height:var(--nav-h);background:var(--card);border-top:0.5px solid var(--bord
         <label class="form-label">
           Tipo de servicio
           <div class="tooltip-wrap">
-            <button class="help-btn" onclick="toggleTooltip('tt-tipo-i')">?</button>
+            <button class="help-btn" onclick="toggleTooltip('tt-tipo-i', this)">?</button>
             <div class="tooltip" id="tt-tipo-i"></div>
           </div>
         </label>
@@ -411,7 +411,7 @@ nav{height:var(--nav-h);background:var(--card);border-top:0.5px solid var(--bord
         <label class="form-label">
           Categoría
           <div class="tooltip-wrap">
-            <button class="help-btn" onclick="toggleTooltip('tt-tipo-e')">?</button>
+            <button class="help-btn" onclick="toggleTooltip('tt-tipo-e', this)">?</button>
             <div class="tooltip" id="tt-tipo-e"></div>
           </div>
         </label>
@@ -645,7 +645,20 @@ async function addMovimiento(rec) {
 // ═══════════════════════════════════════════════════════════
 const fmt = n => '$' + Math.round(n).toLocaleString('es-CL');
 const fmtD = s => { const d = new Date(s + 'T12:00:00'); return d.toLocaleDateString('es-CL', { day: 'numeric', month: 'short' }); };
-const fmtDLong = s => { const d = new Date(s + 'T12:00:00'); return d.toLocaleDateString('es-CL', { day: 'numeric', month: 'long', year: 'numeric' }); };
+const fmtDLong = s => {
+  if (!s) return '';
+  let iso = s.toString().trim();
+  // DD/MM/AAAA → ISO
+  if (iso.includes('/')) {
+    const p = iso.split('/');
+    if (p.length === 3 && p[2].length === 4) iso = p[2] + '-' + p[1].padStart(2,'0') + '-' + p[0].padStart(2,'0');
+  }
+  // Debe quedar YYYY-MM-DD
+  if (!/^\d{4}-\d{2}-\d{2}/.test(iso)) return '';
+  const d = new Date(iso + 'T12:00:00');
+  if (isNaN(d)) return '';
+  return d.toLocaleDateString('es-CL', { day: 'numeric', month: 'long', year: 'numeric' });
+};
 const today = () => new Date().toISOString().slice(0, 10);
 const curMonth = () => new Date().toISOString().slice(0, 7);
 const initials = c => ((c.nombre || '')[0] || '') + ((c.apellido || '')[0] || '');
@@ -760,8 +773,16 @@ function renderClientes() {
   const todayStr = today();
   el.innerHTML = filtered.map(c => {
     const isBday = c.bday && c.bday.slice(5) === todayStr.slice(5);
-    const hasCita = c.pcita && c.pcita >= todayStr;
-    const svcCount = txs.filter(t => t.clienteId === c.id && t.tipo === 'Ingreso').length;
+    const pcitaISO = c.pcita ? normalizarFecha(c.pcita) : '';
+    const hasCita = pcitaISO && pcitaISO >= todayStr;
+    const nombreC = (c.nombre + ' ' + (c.apellido||'')).trim().toLowerCase();
+    const nombreSimple = c.nombre.trim().toLowerCase();
+    const svcCount = txs.filter(t => {
+      if (t.tipo !== 'Ingreso') return false;
+      const tc = (t.cliente||'').trim().toLowerCase();
+      return tc === nombreC || tc === nombreSimple || t.clienteId === c.id ||
+             (tc && nombreC && (tc.startsWith(nombreSimple) || nombreC.startsWith(tc)));
+    }).length;
     return `<div class="client-card" onclick="verCliente('${c.id}')">
       <div class="client-avatar">${c.foto ? `<img src="${c.foto}">` : (initials(c)||'👤')}</div>
       <div class="client-info">
@@ -771,7 +792,7 @@ function renderClientes() {
         </div>
         <div class="client-meta">${svcCount} servicio${svcCount!==1?'s':''} · ${escape(c.servicio||'Sin servicio fijo')}${c.tel?' · '+escape(c.tel):''}</div>
       </div>
-      ${hasCita ? `<span class="client-badge cita">📅 ${fmtD(c.pcita)}</span>` : ''}
+      ${hasCita ? `<span class="client-badge cita">📅 ${fmtD(pcitaISO)}</span>` : ''}
     </div>`;
   }).join('');
 }
@@ -779,8 +800,16 @@ function renderClientes() {
 function verCliente(id) {
   const c = clientes.find(x => x.id === id);
   if (!c) return;
-  const historial = txs.filter(t => t.clienteId === id && t.tipo === 'Ingreso').sort((a,b) => b.fecha.localeCompare(a.fecha));
-  const total = historial.reduce((a, t) => a + t.monto, 0);
+  const nombreC = (c.nombre + ' ' + (c.apellido||'')).trim().toLowerCase();
+  const nombreSimple = c.nombre.trim().toLowerCase();
+  // Buscar por nombre (desde Sheet los txs no tienen clienteId consistente)
+  const historial = txs.filter(t => {
+    if (t.tipo !== 'Ingreso') return false;
+    const tc = (t.cliente||'').trim().toLowerCase();
+    return tc === nombreC || tc === nombreSimple || t.clienteId === id ||
+           (tc && nombreC && (tc.startsWith(nombreSimple) || nombreC.startsWith(tc)));
+  }).sort((a,b) => (b.fecha||'').localeCompare(a.fecha||''));
+  const total = historial.reduce((a, t) => a + (parseFloat(t.monto)||0), 0);
   const fotos = loadData('sn_fotos_' + id, []);
   document.getElementById('detalle-content').innerHTML = `
     <div class="detail-avatar-big">${c.foto ? `<img src="${c.foto}">` : (initials(c)||'👤')}</div>
@@ -1030,7 +1059,16 @@ function toggleOpcionales(tipo) {
 
 function toggleTooltip(id) {
   document.querySelectorAll('.tooltip').forEach(t => { if (t.id !== id) t.classList.remove('open'); });
-  document.getElementById(id).classList.toggle('open');
+  const tt = document.getElementById(id);
+  tt.classList.toggle('open');
+  if (tt.classList.contains('open')) {
+    // Posicionar debajo del botón ? en móvil
+    const btn = tt.previousElementSibling;
+    if (btn) {
+      const rect = btn.getBoundingClientRect();
+      tt.style.top = (rect.bottom + 8) + 'px';
+    }
+  }
 }
 
 function updateTooltipTipoI() {
@@ -1064,11 +1102,14 @@ document.addEventListener('click', e => { if (!e.target.closest('.autocomplete-w
 async function guardarMovimiento() {
   const fecha = document.getElementById('f-fecha').value;
   const monto = parseFloat(document.getElementById('f-monto').value);
-  if (!fecha || !monto || monto <= 0) { showStatus('reg-status', '⚠️ Por favor completa fecha y monto', 'err'); return; }
+  if (!fecha || !monto || monto <= 0) {
+    btn.disabled = false;
+    showStatus('reg-status', '⚠️ Por favor completa fecha y monto', 'err');
+    return;
+  }
 
   const btn = document.getElementById('btn-guardar');
   btn.disabled = true;
-  btn.innerHTML = '<span class="spinner"></span>Guardando...';
 
   // Construir registro con estructura correcta
   const rec = { id: Date.now(), tipo: currentTipo, fecha, monto };
@@ -1104,34 +1145,30 @@ async function guardarMovimiento() {
     });
   }
 
-  txs.push(rec);
-  saveData('sn_txs', txs);
-  renderInicio(); // actualizar balance inmediatamente
+  // ── Optimistic UI: mostrar inmediatamente sin esperar Sheet ──
+  txs.unshift(rec); // agregar al inicio (más reciente primero)
+  renderInicio();
+  renderScreen(currentScreen);
 
-  // Enviar a Sheet
+  // Cerrar modal de inmediato
+  closeModal('modal-registro');
+  btn.disabled = false;
+  btn.innerHTML = 'Guardar movimiento';
+
+  // Sincronizar con Sheet en segundo plano (sin bloquear la UI)
   if (appsScriptURL) {
-    const resultado = await addMovimiento(rec);
-    if (resultado) {
-      showStatus('reg-status', '✅ Guardado en Google Sheets', 'ok');
-    } else {
-      showStatus('reg-status', '💾 Guardado localmente (sin conexión a Sheet)', 'err');
-    }
-  } else {
-    showStatus('reg-status', '💾 Guardado localmente — configura la Sheet para sincronizar', 'ok');
+    addMovimiento(rec).then(async resultado => {
+      if (resultado) {
+        setSyncBadge(true);
+        // Recargar silenciosamente para sincronizar con Sheet
+        await recargarDesdeSheet();
+        renderInicio();
+        if (currentScreen !== 's-inicio') renderScreen(currentScreen);
+      } else {
+        setSyncBadge(false);
+      }
+    }).catch(() => setSyncBadge(false));
   }
-
-  setTimeout(async () => {
-    closeModal('modal-registro');
-    btn.disabled = false;
-    btn.innerHTML = 'Guardar movimiento';
-    // Recargar desde Sheet para mostrar datos reales
-    if (appsScriptURL) {
-      await recargarDesdeSheet();
-      setSyncBadge(true);
-    }
-    renderInicio();
-    if (currentScreen !== 's-inicio') renderScreen(currentScreen);
-  }, 1400);
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -1202,20 +1239,22 @@ function guardarCliente() {
   } else {
     clientes.push({ id: 'c' + Date.now(), nombre, apellido: document.getElementById('cl-apellido').value.trim(), tel: document.getElementById('cl-telefono').value.trim(), bday: bdayToISO(document.getElementById('cl-bday').value), servicio: document.getElementById('cl-servicio').value, notas: document.getElementById('cl-notas').value.trim(), foto: tempPhotoData || '', pcita: '', visitas: 0 });
   }
-  saveData('sn_clientes', clientes);
-  // Guardar también en Sheet
+  // datos en memoria — Sheet se sincroniza abajo
+  // Cerrar modal inmediatamente — sincronizar Sheet en background
+  closeModal('modal-cliente');
+  renderClientes();
+
   if (appsScriptURL) {
-    const cData = editingClienteId ? clientes.find(x=>x.id===editingClienteId) : clientes[clientes.length-1];
+    const cData = editingClienteId
+      ? clientes.find(x => x.id === editingClienteId)
+      : clientes[clientes.length - 1];
     if (cData) {
-      apiPost({ accion: 'saveCliente', ...cData }).catch(()=>{});
+      apiPost({ accion: 'saveCliente', ...cData }).then(async () => {
+        await recargarDesdeSheet();
+        renderClientes();
+      }).catch(() => {});
     }
   }
-  showStatus('cl-status', '✅ Cliente guardada', 'ok');
-  setTimeout(async () => {
-    closeModal('modal-cliente');
-    if (appsScriptURL) await recargarDesdeSheet();
-    renderClientes();
-  }, 900);
 }
 
 // ═══════════════════════════════════════════════════════════
