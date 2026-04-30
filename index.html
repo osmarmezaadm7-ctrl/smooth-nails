@@ -205,6 +205,12 @@ nav{height:var(--nav-h);background:var(--card);border-top:0.5px solid var(--bord
 .photo-pick img{width:100%;height:100%;object-fit:cover;}
 ::-webkit-scrollbar{width:3px;}
 ::-webkit-scrollbar-thumb{background:var(--rose-m);border-radius:2px;}
+.bday-notif{margin:0 16px 12px;background:var(--gold-l);border:1.5px solid var(--gold-m);border-radius:16px;padding:14px 16px;animation:fadeIn .3s ease;}
+.bday-notif-title{font-size:13px;font-weight:600;color:var(--gold);margin-bottom:10px;display:flex;align-items:center;gap:6px;}
+.bday-notif-item{display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:0.5px solid var(--gold-m);}
+.bday-notif-item:last-child{border-bottom:none;padding-bottom:0;}
+.bday-notif-name{font-size:14px;font-weight:500;color:var(--ink);}
+.bday-notif-btn{padding:7px 12px;background:var(--gold);color:white;border:none;border-radius:20px;font-size:12px;font-weight:600;font-family:var(--ff);cursor:pointer;white-space:nowrap;flex-shrink:0;}
 </style>
 </head>
 <body>
@@ -225,6 +231,7 @@ nav{height:var(--nav-h);background:var(--card);border-top:0.5px solid var(--bord
         <div style="width:38px;height:38px;border-radius:50%;background:var(--rose-l);border:1.5px solid var(--rose-m);display:flex;align-items:center;justify-content:center;font-family:var(--fs);font-size:16px;color:var(--rose);cursor:pointer;" onclick="goTo('s-clientes')">M</div>
       </div>
     </div>
+    <div id="bday-notif-container"></div>
     <div class="balance-hero">
       <div class="bh-label">Balance del mes</div>
       <div class="bh-amount" id="bh-amount">$0</div>
@@ -313,6 +320,16 @@ nav{height:var(--nav-h);background:var(--card);border-top:0.5px solid var(--bord
           <strong>Paso 4:</strong> Clic en Implementar → Nueva implementación → Aplicación web → Acceso: Cualquier usuario<br><br>
           <strong>Paso 5:</strong> Copia la URL y pégala arriba
         </div>
+      </div>
+      <div class="config-card">
+        <div class="config-title">🎂 Opciones de regalo de cumpleaños</div>
+        <div class="config-sub">Lista de regalos que puedes enviar el día de cumpleaños. Agrega, edita o elimina opciones.</div>
+        <div id="cfg-regalos-list" style="margin-bottom:12px;"></div>
+        <div style="display:flex;gap:8px;">
+          <input class="form-input" id="cfg-nuevo-regalo" placeholder="Nuevo regalo..." style="font-size:13px;flex:1;">
+          <button onclick="agregarRegalo()" style="padding:11px 16px;background:var(--rose);color:white;border:none;border-radius:12px;font-size:13px;font-weight:600;font-family:var(--ff);cursor:pointer;white-space:nowrap;">+ Agregar</button>
+        </div>
+        <div class="status-msg" id="regalos-status" style="margin-top:8px;"></div>
       </div>
       <div class="config-card">
         <div class="config-title">🗑️ Datos</div>
@@ -539,6 +556,17 @@ nav{height:var(--nav-h);background:var(--card);border-top:0.5px solid var(--bord
   </div>
 </div>
 
+<!-- MODAL SELECTOR DE REGALO CUMPLEAÑOS -->
+<div class="modal-bg" id="modal-regalo-bday">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title">🎁 Elegir regalo</div>
+    <div class="modal-sub" id="regalo-bday-subtitle">Para la clienta</div>
+    <div id="regalo-bday-list" style="margin-bottom:8px;"></div>
+    <button class="btn-secondary" onclick="closeModal('modal-regalo-bday')">Cancelar</button>
+  </div>
+</div>
+
 <script>
 // ═══════════════════════════════════════════════════════════
 // CONFIG & ESTADO
@@ -573,6 +601,15 @@ const DESCRIPCIONES_TIPO = {
 // Estado
 let appsScriptURL = localStorage.getItem('sn_script_url') || '';
 let DIRECCION_ESTUDIO = localStorage.getItem('sn_dir_estudio') || 'Las Agatas 2220, San Bernardo';
+// Lista de opciones de regalo de cumpleaños (configurable)
+const REGALOS_DEFAULT = [
+  '🎀 20% de descuento en tu próximo servicio',
+  '💅 Manicure express de regalo en tu cumpleaños',
+  '✨ Esmaltado permanente gratis en tu mes de cumpleaños',
+  '🌸 15% de descuento en cualquier servicio este mes',
+  '💎 Diseño nail art de regalo en tu próxima cita'
+];
+let regalos_bday = JSON.parse(localStorage.getItem('sn_regalos_bday') || 'null') || [...REGALOS_DEFAULT];
 let _clienteActivo = null; // cliente seleccionado en modal contactar/agendar
 let _lugarCita = 'estudio'; // 'estudio' o 'domicilio'
 let tiposIngreso = [...TIPOS_INGRESO_DEFAULT];
@@ -747,13 +784,14 @@ const fmtDLong = s => {
 const fmtBday = s => {
   if (!s) return '';
   const str = s.toString().trim();
-  // Formato 0000-MM-DD (solo día y mes)
+  const meses = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+  // Formato DD/MM (nuevo)
+  const mDDMM = str.match(/^(\d{1,2})\/(\d{1,2})$/);
+  if (mDDMM) return parseInt(mDDMM[1]) + ' de ' + meses[parseInt(mDDMM[2])-1];
+  // Formato 0000-MM-DD (legado)
   const m0 = str.match(/^0000-(\d{2})-(\d{2})$/);
-  if (m0) {
-    const meses = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
-    return parseInt(m0[2]) + ' de ' + meses[parseInt(m0[1])-1];
-  }
-  // Formato ISO completo YYYY-MM-DD
+  if (m0) return parseInt(m0[2]) + ' de ' + meses[parseInt(m0[1])-1];
+  // Formato YYYY-MM-DD (legado con año)
   const iso = normalizarFecha(str);
   if (!iso) return '';
   const d = new Date(iso + 'T12:00:00');
@@ -813,6 +851,83 @@ function renderScreen(id) {
   else if (id === 's-config') renderConfig();
 }
 
+function renderBirthdayNotifs() {
+  const todayStr = today();
+  const cumpleaneros = clientes.filter(c => {
+    if (!c.bday) return false;
+    const b = c.bday.toString().trim();
+    // Formato DD/MM
+    const mDDMM = b.match(/^(\d{1,2})\/(\d{1,2})$/);
+    if (mDDMM) {
+      const dia = mDDMM[1].padStart(2,'0');
+      const mes = mDDMM[2].padStart(2,'0');
+      return todayStr.slice(5) === mes + '-' + dia;
+    }
+    // Formato YYYY-MM-DD o 0000-MM-DD
+    const slice = b.length >= 10 ? b.slice(5,10) : '';
+    return slice && slice === todayStr.slice(5);
+  });
+
+  const container = document.getElementById('bday-notif-container');
+  if (!container) return;
+
+  if (!cumpleaneros.length) { container.innerHTML = ''; return; }
+
+  container.innerHTML = `
+    <div class="bday-notif">
+      <div class="bday-notif-title">🎂 ¡Cumpleaños hoy!</div>
+      ${cumpleaneros.map(c => `
+        <div class="bday-notif-item">
+          <div>
+            <div class="bday-notif-name">${escape(fullName(c))}</div>
+            <div style="font-size:11px;color:var(--ink3);">Toca para enviar un regalo 🎁</div>
+          </div>
+          <button class="bday-notif-btn" onclick="enviarDescuentoBday('${c.id}')">
+            🎁 Enviar descuento
+          </button>
+        </div>`).join('')}
+    </div>`;
+}
+
+function enviarDescuentoBday(clienteId) {
+  const c = clientes.find(x => x.id === clienteId);
+  if (!c) return;
+  if (!c.tel) { alert('Esta clienta no tiene teléfono registrado'); return; }
+
+  // Mostrar modal con opciones de regalo
+  document.getElementById('regalo-bday-subtitle').textContent = '🎂 Para ' + fullName(c);
+  const list = document.getElementById('regalo-bday-list');
+  list.innerHTML = regalos_bday.map((r, i) => `
+    <div onclick="confirmarRegalo('${clienteId}', ${i})"
+      style="padding:12px 14px;border:1.5px solid var(--border2);border-radius:12px;margin-bottom:8px;cursor:pointer;font-size:14px;color:var(--ink);transition:background .15s;"
+      onmouseenter="this.style.background='var(--rose-l)'"
+      onmouseleave="this.style.background=''">
+      ${escape(r)}
+    </div>`).join('');
+  document.getElementById('modal-regalo-bday').classList.add('open');
+}
+
+function confirmarRegalo(clienteId, regaloIdx) {
+  const c = clientes.find(x => x.id === clienteId);
+  if (!c) return;
+  const regalo = regalos_bday[regaloIdx] || regalos_bday[0];
+  // Limpiar emoji del inicio para el mensaje
+  const regaloTexto = regalo.replace(/^[\u{1F300}-\u{1FFFF}\u{2600}-\u{26FF}\s]+/u, '').trim();
+  const tel = limpiarTel(c.tel);
+  const msg = encodeURIComponent(
+    `¡Hola ${c.nombre}! 🎂✨\n\n` +
+    `En Smooth Nails queremos celebrar tu cumpleaños contigo 💅\n\n` +
+    `Como regalo especial de cumpleaños, te ofrecemos:\n` +
+    `🎁 *${regalo}*\n\n` +
+    `Válido durante todo tu mes de cumpleaños 🌸\n\n` +
+    `¡Escríbenos para agendar tu cita!\n` +
+    `— Martina, Smooth Nails\n` +
+    `📍 ${DIRECCION_ESTUDIO}`
+  );
+  closeModal('modal-regalo-bday');
+  abrirWSP(tel, msg);
+}
+
 function renderInicio() {
   const m = curMonth();
   // Calcular siempre desde txs locales (refleja tiempo real)
@@ -829,6 +944,9 @@ function renderInicio() {
   document.getElementById('bh-ing').textContent = fmt(tI);
   document.getElementById('bh-egr').textContent = fmt(tE);
   document.getElementById('bh-svc').textContent = svcCount;
+  // Notificaciones de cumpleaños
+  renderBirthdayNotifs();
+
   const now = new Date();
   document.getElementById('bh-month').textContent = now.toLocaleDateString('es-CL', { month: 'long', year: 'numeric' });
   document.getElementById('inicio-fecha').textContent = now.toLocaleDateString('es-CL', { weekday: 'long', day: 'numeric', month: 'long' });
@@ -903,8 +1021,16 @@ function renderClientes() {
   if (!filtered.length) { el.innerHTML = '<div class="empty"><div class="empty-icon">👤</div><div class="empty-text">No se encontraron clientes</div></div>'; return; }
   const todayStr = today();
   el.innerHTML = filtered.map(c => {
-    const bdaySlice = c.bday ? (c.bday.startsWith('0000-') ? c.bday.slice(5) : c.bday.slice(5)) : '';
-    const isBday = bdaySlice && bdaySlice === todayStr.slice(5);
+    // Comparar cumpleaños con hoy — maneja DD/MM y 0000-MM-DD
+    let bdayMMDD = '';
+    if (c.bday) {
+      const b = c.bday.toString().trim();
+      const mDDMM = b.match(/^(\d{1,2})\/(\d{1,2})$/);
+      if (mDDMM) bdayMMDD = mDDMM[2].padStart(2,'0') + '-' + mDDMM[1].padStart(2,'0');
+      else if (b.startsWith('0000-')) bdayMMDD = b.slice(5); // MM-DD
+      else if (b.match(/^\d{4}-\d{2}-\d{2}/)) bdayMMDD = b.slice(5); // MM-DD de YYYY-MM-DD
+    }
+    const isBday = bdayMMDD && bdayMMDD === todayStr.slice(5);
     const pcitaISO = c.pcita ? normalizarFecha(c.pcita) : '';
     const hasCita = pcitaISO && pcitaISO >= todayStr;
     const nombreC = (c.nombre + ' ' + (c.apellido||'')).trim().toLowerCase();
@@ -1094,7 +1220,41 @@ function setRepMonth(m) { document.getElementById('rep-tabs').dataset.sel = m; r
 function renderConfig() {
   const url = localStorage.getItem('sn_script_url') || '';
   document.getElementById('cfg-url').value = url;
+  renderRegalosConfig();
   updateConfigStatus();
+}
+
+function renderRegalosConfig() {
+  const list = document.getElementById('cfg-regalos-list');
+  if (!list) return;
+  if (!regalos_bday.length) {
+    list.innerHTML = '<div style="font-size:13px;color:var(--ink3);padding:8px 0;">Sin opciones. Agrega tu primer regalo.</div>';
+    return;
+  }
+  list.innerHTML = regalos_bday.map((r, i) => `
+    <div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:0.5px solid var(--border);">
+      <span style="flex:1;font-size:13px;color:var(--ink);">${escape(r)}</span>
+      <button onclick="eliminarRegalo(${i})" style="width:28px;height:28px;border-radius:50%;background:var(--rose-l);color:var(--rose);border:none;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">×</button>
+    </div>`).join('');
+}
+
+function agregarRegalo() {
+  const input = document.getElementById('cfg-nuevo-regalo');
+  const val = input.value.trim();
+  if (!val) { showStatus('regalos-status', 'Escribe el regalo primero', 'err'); return; }
+  regalos_bday.push(val);
+  localStorage.setItem('sn_regalos_bday', JSON.stringify(regalos_bday));
+  input.value = '';
+  renderRegalosConfig();
+  showStatus('regalos-status', '✅ Regalo agregado', 'ok');
+}
+
+function eliminarRegalo(idx) {
+  if (regalos_bday.length <= 1) { showStatus('regalos-status', 'Debe haber al menos una opción', 'err'); return; }
+  regalos_bday.splice(idx, 1);
+  localStorage.setItem('sn_regalos_bday', JSON.stringify(regalos_bday));
+  renderRegalosConfig();
+  showStatus('regalos-status', 'Regalo eliminado', 'ok');
 }
 
 function updateConfigStatus() {
@@ -1341,22 +1501,17 @@ function openNuevoCliente(editId = null) {
   document.getElementById('cl-apellido').value = c?.apellido || '';
   document.getElementById('cl-telefono').value = c?.tel || '';
   if (c && c.bday) {
-    // Formato guardado: 0000-MM-DD
-    const bdMatch = c.bday.match(/^0000-(\d{2})-(\d{2})$/);
-    if (bdMatch) {
-      document.getElementById('cl-bday-mes').value = bdMatch[1]; // MM
-      document.getElementById('cl-bday-dia').value = bdMatch[2]; // DD
-    } else {
-      // Formato ISO YYYY-MM-DD (legado)
-      const isoMatch = c.bday.match(/^\d{4}-(\d{2})-(\d{2})$/);
-      if (isoMatch) {
-        document.getElementById('cl-bday-mes').value = isoMatch[1];
-        document.getElementById('cl-bday-dia').value = isoMatch[2];
-      } else {
-        document.getElementById('cl-bday-mes').value = '';
-        document.getElementById('cl-bday-dia').value = '';
-      }
-    }
+    const b = c.bday.toString().trim();
+    let dia = '', mes = '';
+    // Formato DD/MM (nuevo formato simple)
+    const mDDMM = b.match(/^(\d{1,2})\/(\d{1,2})$/);
+    if (mDDMM) { dia = mDDMM[1].padStart(2,'0'); mes = mDDMM[2].padStart(2,'0'); }
+    // Formato 0000-MM-DD (legado)
+    else { const m0 = b.match(/^0000-(\d{2})-(\d{2})$/); if (m0) { mes = m0[1]; dia = m0[2]; } }
+    // Formato YYYY-MM-DD (legado con año real)
+    if (!dia) { const mISO = b.match(/^\d{4}-(\d{2})-(\d{2})$/); if (mISO) { mes = mISO[1]; dia = mISO[2]; } }
+    document.getElementById('cl-bday-dia').value = dia;
+    document.getElementById('cl-bday-mes').value = mes;
   } else {
     document.getElementById('cl-bday-mes').value = '';
     document.getElementById('cl-bday-dia').value = '';
@@ -1426,7 +1581,8 @@ async function guardarCliente() {
   // Construir objeto cliente completo
   const bdDia = document.getElementById('cl-bday-dia').value;
   const bdMes = document.getElementById('cl-bday-mes').value;
-  const bday  = bdDia && bdMes ? '0000-' + bdMes + '-' + bdDia : '';
+  // Guardar como DD/MM — texto simple, compatible con Google Sheets
+  const bday  = bdDia && bdMes ? bdDia + '/' + bdMes : '';
 
   let clienteData;
   if (editingClienteId) {
