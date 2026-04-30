@@ -911,15 +911,22 @@ function confirmarRegalo(clienteId, regaloIdx) {
   const c = clientes.find(x => x.id === clienteId);
   if (!c) return;
   const regalo = regalos_bday[regaloIdx] || regalos_bday[0];
-  // Limpiar emoji del inicio para el mensaje
-  const regaloTexto = regalo.replace(/^[\u{1F300}-\u{1FFFF}\u{2600}-\u{26FF}\s]+/u, '').trim();
   const tel = limpiarTel(c.tel);
+
+  // Fecha de vencimiento: exactamente 1 mes después de hoy
+  // Ej: cumpleaños 31 enero → vence 28/29 febrero (JS maneja automáticamente)
+  const hoy = new Date();
+  const vencimiento = new Date(hoy.getFullYear(), hoy.getMonth() + 1, hoy.getDate());
+  const fechaVence = vencimiento.toLocaleDateString('es-CL', {
+    day: 'numeric', month: 'long', year: 'numeric'
+  });
+
   const msg = encodeURIComponent(
     `¡Hola ${c.nombre}! 🎂✨\n\n` +
     `En Smooth Nails queremos celebrar tu cumpleaños contigo 💅\n\n` +
     `Como regalo especial de cumpleaños, te ofrecemos:\n` +
     `🎁 *${regalo}*\n\n` +
-    `Válido durante todo tu mes de cumpleaños 🌸\n\n` +
+    `🗓️ Cupón válido hasta el *${fechaVence}*\n\n` +
     `¡Escríbenos para agendar tu cita!\n` +
     `— Martina, Smooth Nails\n` +
     `📍 ${DIRECCION_ESTUDIO}`
