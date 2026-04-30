@@ -1302,15 +1302,17 @@ async function guardarMovimiento() {
   renderInicio();
   renderScreen(currentScreen);
 
-  // Mostrar confirmación visual breve antes de cerrar
-  showStatus('reg-status', '✅ ¡Registrado!', 'ok');
-  document.getElementById('reg-status').style.display = 'block';
+  // Mostrar confirmación visual — esperar que el DOM se actualice
+  const statusEl = document.getElementById('reg-status');
+  statusEl.textContent = '✅ ¡Movimiento registrado!';
+  statusEl.className = 'status-msg ok';
+  statusEl.style.display = 'block';
+  statusEl.style.marginTop = '10px';
 
-  setTimeout(() => {
-    closeModal('modal-registro');
-    btn.disabled = false;
-    btn.innerHTML = 'Guardar movimiento';
-  }, 800);
+  await new Promise(r => setTimeout(r, 900));
+  closeModal('modal-registro');
+  btn.disabled = false;
+  btn.innerHTML = 'Guardar movimiento';
 
   // Sincronizar con Sheet en segundo plano
   if (appsScriptURL) {
@@ -1338,9 +1340,27 @@ function openNuevoCliente(editId = null) {
   document.getElementById('cl-nombre').value = c?.nombre || '';
   document.getElementById('cl-apellido').value = c?.apellido || '';
   document.getElementById('cl-telefono').value = c?.tel || '';
-  const bdParts = c && c.bday ? c.bday.replace('0000-','').split('-') : ['',''];
-  document.getElementById('cl-bday-dia').value = bdParts[1] || '';
-  document.getElementById('cl-bday-mes').value = bdParts[0] || '';
+  if (c && c.bday) {
+    // Formato guardado: 0000-MM-DD
+    const bdMatch = c.bday.match(/^0000-(\d{2})-(\d{2})$/);
+    if (bdMatch) {
+      document.getElementById('cl-bday-mes').value = bdMatch[1]; // MM
+      document.getElementById('cl-bday-dia').value = bdMatch[2]; // DD
+    } else {
+      // Formato ISO YYYY-MM-DD (legado)
+      const isoMatch = c.bday.match(/^\d{4}-(\d{2})-(\d{2})$/);
+      if (isoMatch) {
+        document.getElementById('cl-bday-mes').value = isoMatch[1];
+        document.getElementById('cl-bday-dia').value = isoMatch[2];
+      } else {
+        document.getElementById('cl-bday-mes').value = '';
+        document.getElementById('cl-bday-dia').value = '';
+      }
+    }
+  } else {
+    document.getElementById('cl-bday-mes').value = '';
+    document.getElementById('cl-bday-dia').value = '';
+  }
   document.getElementById('cl-servicio').value = c?.servicio || '';
   document.getElementById('cl-direccion').value = c?.direccion || '';
   document.getElementById('cl-notas').value = c?.notas || '';
@@ -1383,49 +1403,76 @@ function bdayToDisplay(iso) {
   return iso;
 }
 
-function guardarCliente() {
+async function guardarCliente() {
   const nombre = document.getElementById('cl-nombre').value.trim();
   if (!nombre) { showStatus('cl-status', 'El nombre es obligatorio', 'err'); return; }
+
+  // Construir objeto cliente completo
+  const bdDia = document.getElementById('cl-bday-dia').value;
+  const bdMes = document.getElementById('cl-bday-mes').value;
+  const bday  = bdDia && bdMes ? '0000-' + bdMes + '-' + bdDia : '';
+
+  let clienteData;
   if (editingClienteId) {
-    const c = clientes.find(x => x.id === editingClienteId);
-    c.nombre = nombre;
-    c.apellido = document.getElementById('cl-apellido').value.trim();
-    c.tel = document.getElementById('cl-telefono').value.trim();
-    const bdDia = document.getElementById('cl-bday-dia').value;
-    const bdMes = document.getElementById('cl-bday-mes').value;
-    c.bday = bdDia && bdMes ? '0000-' + bdMes + '-' + bdDia : '';
-    c.servicio = document.getElementById('cl-servicio').value;
-    c.direccion = document.getElementById('cl-direccion').value.trim();
-    c.notas = document.getElementById('cl-notas').value.trim();
-    if (tempPhotoData) c.foto = tempPhotoData;
+    // Editar existente — preservar campos que no se editan (pcita, servicio_favorito)
+    const cExistente = clientes.find(x => x.id === editingClienteId) || {};
+    clienteData = {
+      ...cExistente,
+      nombre,
+      apellido:  document.getElementById('cl-apellido').value.trim(),
+      tel:       document.getElementById('cl-telefono').value.trim(),
+      bday,
+      servicio:  document.getElementById('cl-servicio').value,
+      direccion: document.getElementById('cl-direccion').value.trim(),
+      notas:     document.getElementById('cl-notas').value.trim(),
+      foto:      tempPhotoData || cExistente.foto || ''
+    };
+    // Actualizar en array local
+    const idx = clientes.findIndex(x => x.id === editingClienteId);
+    if (idx >= 0) clientes[idx] = clienteData;
   } else {
-    clientes.push({ id: 'c' + Date.now(), nombre, apellido: document.getElementById('cl-apellido').value.trim(), tel: document.getElementById('cl-telefono').value.trim(), bday: (()=>{ const d=document.getElementById('cl-bday-dia').value; const m=document.getElementById('cl-bday-mes').value; return d&&m?'0000-'+m+'-'+d:''; })(), servicio: document.getElementById('cl-servicio').value, direccion: document.getElementById('cl-direccion').value.trim(),
-      notas: document.getElementById('cl-notas').value.trim(), foto: tempPhotoData || '', pcita: '', visitas: 0 });
+    // Nuevo cliente
+    clienteData = {
+      id:        'c' + Date.now(),
+      nombre,
+      apellido:  document.getElementById('cl-apellido').value.trim(),
+      tel:       document.getElementById('cl-telefono').value.trim(),
+      bday,
+      servicio:  document.getElementById('cl-servicio').value,
+      direccion: document.getElementById('cl-direccion').value.trim(),
+      notas:     document.getElementById('cl-notas').value.trim(),
+      foto:      tempPhotoData || '',
+      pcita:     '',
+      visitas:   0
+    };
+    clientes.push(clienteData);
   }
-  // datos en memoria — Sheet se sincroniza abajo
+
+  // Feedback inmediato
+  showStatus('cl-status', '⏳ Guardando...', 'ok');
   renderClientes();
 
   if (appsScriptURL) {
-    const cData = editingClienteId
-      ? clientes.find(x => x.id === editingClienteId)
-      : clientes[clientes.length - 1];
-    if (cData) {
-      showStatus('cl-status', '⏳ Guardando...', 'ok');
-      apiPost({ accion: 'saveCliente', ...cData }).then(async res => {
-        showStatus('cl-status', '✅ Cliente guardada en Google Sheets', 'ok');
+    try {
+      // Enviar a Sheet — esperar respuesta real
+      const res = await apiPost({ accion: 'saveCliente', ...clienteData });
+      if (res && res.ok) {
+        showStatus('cl-status', '✅ ¡Guardada en Google Sheets!', 'ok');
+        // Recargar desde Sheet preservando fotos locales
         await recargarDesdeSheet();
         renderClientes();
-        // Cerrar modal solo cuando Sheet confirmó
-        setTimeout(() => closeModal('modal-cliente'), 1200);
-      }).catch(() => {
-        showStatus('cl-status', '💾 Guardada localmente — sin conexión a Sheet', 'err');
-        setTimeout(() => closeModal('modal-cliente'), 1500);
-      });
+      } else {
+        showStatus('cl-status', '⚠️ Guardada localmente — Sheet no respondió', 'err');
+      }
+    } catch(e) {
+      showStatus('cl-status', '💾 Guardada localmente — sin conexión', 'err');
     }
   } else {
     showStatus('cl-status', '💾 Guardada localmente', 'ok');
-    setTimeout(() => closeModal('modal-cliente'), 1000);
   }
+
+  // Cerrar después de mostrar el mensaje
+  setTimeout(() => closeModal('modal-cliente'), 1500);
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -1467,18 +1514,22 @@ async function recargarDesdeSheet() {
     })).filter(r => r.fecha);
 
     // Clientes — Sheet es fuente de verdad
-    // Conservar fotos locales (no se guardan en Sheet por tamaño)
-    const datosLocales = {};
+    // Guardar snapshot de fotos locales ANTES de reemplazar
+    const fotosLocales = {};
     clientes.forEach(c => {
-      datosLocales[c.id] = {
-        foto: c.foto || ''  // solo fotos son locales
+      if (c.foto && c.foto.startsWith('data:')) {
+        fotosLocales[c.id] = c.foto; // solo base64 local
+      }
+    });
+    const clientesBase = (res.clientes || []).map(c => {
+      // Prioridad foto: Sheet (si tiene base64 real) > local
+      const fotoSheet = c.foto && c.foto.startsWith('data:') ? c.foto : '';
+      const fotoLocal = fotosLocales[c.id] || '';
+      return {
+        ...c,
+        foto: fotoSheet || fotoLocal
       };
     });
-    const clientesBase = (res.clientes || []).map(c => ({
-      ...c,
-      // foto: Sheet primero, si no hay usar local
-      foto: (c.foto && c.foto.length > 10) ? c.foto : (datosLocales[c.id]?.foto || '')
-    }));
 
     // Enriquecer pcita desde registros si la hoja Clientes no la tiene
     const registros = res.registros || [];
@@ -1701,12 +1752,15 @@ async function confirmarCita() {
     `— Martina, Smooth Nails`
   );
 
-  showStatus('ag-status', '✅ Cita agendada — abriendo WhatsApp...', 'ok');
-  setTimeout(() => {
-    closeModal('modal-agendar');
-    renderInicio();
-    abrirWSP(tel, msg);
-  }, 800);
+  const agStatusEl = document.getElementById('ag-status');
+  agStatusEl.textContent = '✅ Cita agendada — abriendo WhatsApp...';
+  agStatusEl.className = 'status-msg ok';
+  agStatusEl.style.display = 'block';
+
+  await new Promise(r => setTimeout(r, 900));
+  closeModal('modal-agendar');
+  renderInicio();
+  abrirWSP(tel, msg);
 }
 
 async function cancelarCita(id) {
