@@ -749,6 +749,9 @@ function setRegMonth(m) { document.getElementById('reg-tabs').dataset.sel = m; r
 
 function renderTxList(id, items) {
   const el = document.getElementById(id);
+  // Siempre ordenar: más reciente primero
+  const sorted = [...items].sort((a,b) => (b.fecha||'').localeCompare(a.fecha||''));
+  items = sorted;
   if (!items.length) { el.innerHTML = '<div class="empty"><div class="empty-icon">💅</div><div class="empty-text">Sin movimientos aún.<br>¡Registra tu primer servicio!</div></div>'; return; }
   el.innerHTML = items.map(t => {
     const isI = t.tipo === 'Ingreso';
@@ -821,7 +824,7 @@ function verCliente(id) {
     </div>
     <div class="section"><div class="card">
       <div class="info-row"><span class="info-key">Servicio favorito</span><span class="info-val">${escape(c.servicio||'—')}</span></div>
-      ${c.bday?`<div class="info-row"><span class="info-key">Cumpleaños</span><span class="info-val">🎂 ${fmtDLong(c.bday)}</span></div>`:''}
+      ${c.bday && fmtDLong(c.bday) ? `<div class="info-row"><span class="info-key">Cumpleaños</span><span class="info-val">🎂 ${fmtDLong(c.bday)}</span></div>` : c.bday ? `<div class="info-row"><span class="info-key">Cumpleaños</span><span class="info-val">🎂 ${c.bday}</span></div>` : ''}
       <div class="info-row"><span class="info-key">Próxima cita</span><span class="info-val">${c.pcita?'📅 '+fmtDLong(c.pcita):'Sin agendar'}</span></div>
       <div class="info-row"><span class="info-key">Total facturado</span><span class="info-val" style="color:var(--sage)">${fmt(total)}</span></div>
       <div class="info-row"><span class="info-key">Visitas</span><span class="info-val">${historial.length} servicio${historial.length!==1?'s':''}</span></div>
@@ -1146,7 +1149,7 @@ async function guardarMovimiento() {
   }
 
   // ── Optimistic UI: mostrar inmediatamente sin esperar Sheet ──
-  txs.unshift(rec); // agregar al inicio (más reciente primero)
+  txs.unshift(rec); // agregar al inicio — el más reciente va primero
   renderInicio();
   renderScreen(currentScreen);
 
@@ -1298,7 +1301,26 @@ async function recargarDesdeSheet() {
     // Clientes — Sheet es la única fuente, conservar fotos locales
     const fotosLocales = {};
     clientes.forEach(c => { if (c.foto) fotosLocales[c.id] = c.foto; });
-    clientes = (res.clientes || []).map(c => ({ ...c, foto: fotosLocales[c.id] || '' }));
+    const clientesBase = (res.clientes || []).map(c => ({ ...c, foto: fotosLocales[c.id] || '' }));
+
+    // Enriquecer pcita desde registros si la hoja Clientes no la tiene
+    const registros = res.registros || [];
+    clientes = clientesBase.map(c => {
+      if (c.pcita && c.pcita.trim()) return c; // ya tiene cita en Sheet
+      const nombreC = (c.nombre + ' ' + (c.apellido||'')).trim().toLowerCase();
+      const nombreSimple = c.nombre.trim().toLowerCase();
+      // Buscar la próxima cita más reciente en registros
+      const citasRegistros = registros
+        .filter(r => {
+          const tc = (r.cliente||'').trim().toLowerCase();
+          return (tc === nombreC || tc === nombreSimple) && r.pcita && r.pcita.trim();
+        })
+        .map(r => normalizarFecha(r.pcita))
+        .filter(f => f >= today())
+        .sort();
+      if (citasRegistros.length) return { ...c, pcita: citasRegistros[0] };
+      return c;
+    });
 
     // Dashboard
     if (res.dashboard && res.dashboard.ok) dashboardData = res.dashboard;
