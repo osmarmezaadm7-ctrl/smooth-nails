@@ -947,10 +947,16 @@ function verCliente(id) {
     <div class="detail-avatar-big">${c.foto ? `<img src="${c.foto}">` : (initials(c)||'👤')}</div>
     <div class="detail-name">${escape(fullName(c))}</div>
     <div class="detail-phone">${escape(c.tel||'Sin teléfono')}</div>
-    <div class="detail-actions">
+    <div class="detail-actions" style="flex-wrap:wrap;">
       <button class="action-btn" onclick="openNuevoCliente('${id}')">✏️ Editar</button>
       <button class="action-btn" onclick="contactarCliente('${id}')">📞 Contactar</button>
-      <button class="action-btn primary" onclick="openAgendarCita('${id}')">📅 Agendar</button>
+      ${(()=>{
+        const pcitaISO = normalizarFecha((c.pcita||'').toString());
+        const tieneCita = pcitaISO && pcitaISO >= today();
+        return tieneCita
+          ? `<button class="action-btn primary" style="flex:2;" onclick="openAgendarCita('${id}', true)">🔄 Reagendar</button>`
+          : `<button class="action-btn primary" style="flex:2;" onclick="openAgendarCita('${id}', false)">📅 Agendar</button>`;
+      })()}
     </div>
     <div class="section"><div class="card">
       <div class="info-row"><span class="info-key">Servicio favorito</span><span class="info-val">${escape(c.servicio||'—')}</span></div>
@@ -1509,19 +1515,37 @@ function wspCliente() {
   const tel = limpiarTel(_clienteActivo.tel);
   if (!tel) return;
   const msg = encodeURIComponent(`Hola ${_clienteActivo.nombre} 💅 Te escribo desde Smooth Nails. ¿En qué te puedo ayudar?`);
-  window.open(`https://wa.me/${tel.replace('+','')}?text=${msg}`, '_blank');
+  abrirWSP(tel, msg);
   closeModal('modal-contactar');
+}
+
+function abrirWSP(tel, msg) {
+  const telLimpio = tel.replace('+','').replace(/\s/g,'');
+  // Intentar abrir app nativa primero
+  const urlApp = `whatsapp://send?phone=${telLimpio}&text=${msg}`;
+  const urlWeb = `https://api.whatsapp.com/send?phone=${telLimpio}&text=${msg}`;
+  // En móvil usa deep link, en desktop fallback a web
+  const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+  if (isMobile) {
+    window.location.href = urlApp;
+    // Fallback si no tiene WSP instalado
+    setTimeout(() => { window.open(urlWeb, '_blank'); }, 1500);
+  } else {
+    window.open(urlWeb, '_blank');
+  }
 }
 
 // ═══════════════════════════════════════════════════════════
 // AGENDAR CITA
 // ═══════════════════════════════════════════════════════════
-function openAgendarCita(id) {
+function openAgendarCita(id, isReagendar = false) {
   const c = clientes.find(x => x.id === id);
   if (!c) return;
   _clienteActivo = c;
   _lugarCita = 'estudio';
 
+  // Título del modal
+  document.querySelector('#modal-agendar .modal-title').textContent = isReagendar ? 'Reagendar cita' : 'Agendar cita';
   document.getElementById('agendar-cliente-nombre').textContent = 'Para ' + fullName(c);
 
   // Poblar tipos de servicio
@@ -1529,14 +1553,23 @@ function openAgendarCita(id) {
   sel.innerHTML = tiposIngreso.filter(t => esServicio(t)).map(t => `<option value="${t}">${t}</option>`).join('');
   if (c.servicio) sel.value = c.servicio;
 
-  // Fecha por defecto: mañana
-  const manana = new Date();
-  manana.setDate(manana.getDate() + 1);
-  document.getElementById('ag-fecha').value = manana.toISOString().slice(0,10);
+  // Si es reagendar, precargar fecha existente; si no, mañana
+  if (isReagendar && c.pcita) {
+    const pcitaISO = normalizarFecha(c.pcita.toString());
+    document.getElementById('ag-fecha').value = pcitaISO || '';
+  } else {
+    const manana = new Date();
+    manana.setDate(manana.getDate() + 1);
+    document.getElementById('ag-fecha').value = manana.toISOString().slice(0,10);
+  }
   document.getElementById('ag-hora').value = '10:00';
 
   // Dirección estudio por defecto
   setLugar('estudio');
+
+  // Texto del botón confirmar
+  document.querySelector('#modal-agendar .btn-primary').textContent =
+    isReagendar ? '🔄 Confirmar reagendamiento y enviar WSP' : '✅ Confirmar y enviar WSP';
 
   document.getElementById('ag-status').style.display = 'none';
   document.getElementById('modal-agendar').classList.add('open');
@@ -1626,7 +1659,7 @@ async function confirmarCita() {
 
   closeModal('modal-agendar');
   renderInicio();
-  window.open(`https://wa.me/${tel.replace('+','')}?text=${msg}`, '_blank');
+  abrirWSP(tel, msg);
 }
 
 async function getParamsFromSheet() {
