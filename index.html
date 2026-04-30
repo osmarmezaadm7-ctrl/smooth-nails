@@ -6,8 +6,11 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Smooth Nails">
-<meta name="theme-color" content="#fff0f5">
+<meta name="theme-color" content="#c8476a">
 <title>Smooth Nails</title>
+<link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='115' fill='%23c8476a'/%3E%3Cellipse cx='256' cy='210' rx='90' ry='110' fill='%23fff' opacity='.95'/%3E%3Cellipse cx='256' cy='195' rx='72' ry='88' fill='%23f2c4d0'/%3E%3Crect x='166' y='300' width='180' height='28' rx='14' fill='%23fff' opacity='.9'/%3E%3Crect x='186' y='340' width='140' height='22' rx='11' fill='%23fff' opacity='.7'/%3E%3Ccircle cx='178' cy='160' r='18' fill='%23c8476a' opacity='.6'/%3E%3Ccircle cx='334' cy='160' r='18' fill='%23c8476a' opacity='.6'/%3E%3C/svg%3E">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='115' fill='%23c8476a'/%3E%3Cellipse cx='256' cy='210' rx='90' ry='110' fill='%23fff' opacity='.95'/%3E%3Cellipse cx='256' cy='195' rx='72' ry='88' fill='%23f2c4d0'/%3E%3Crect x='166' y='300' width='180' height='28' rx='14' fill='%23fff' opacity='.9'/%3E%3Crect x='186' y='340' width='140' height='22' rx='11' fill='%23fff' opacity='.7'/%3E%3C/svg%3E">
+<link rel="manifest" href="data:application/json,%7B%22name%22%3A%22Smooth+Nails%22%2C%22short_name%22%3A%22Smooth+Nails%22%2C%22start_url%22%3A%22.%22%2C%22display%22%3A%22standalone%22%2C%22background_color%22%3A%22%23fdf0f4%22%2C%22theme_color%22%3A%22%23c8476a%22%7D">
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Serif+Display:ital@0;1&display=swap" rel="stylesheet">
 <style>
 :root{--rose:#c8476a;--rose-l:#fdf0f4;--rose-m:#f2c4d0;--rose-d:#8c2e47;--sage:#4a7c6f;--sage-l:#edf4f2;--sage-m:#a8cfc8;--sage-d:#2d5249;--gold:#b08030;--gold-l:#fdf6e8;--gold-m:#e8c87a;--ink:#1a1a2e;--ink2:#4a4a6a;--ink3:#9090aa;--bg:#faf9fb;--card:#ffffff;--border:rgba(180,160,175,.18);--border2:rgba(180,160,175,.35);--ff:'DM Sans',sans-serif;--fs:'DM Serif Display',serif;--nav-h:68px;--safe-b:env(safe-area-inset-bottom,0px);}
@@ -460,7 +463,13 @@ nav{height:var(--nav-h);background:var(--card);border-top:0.5px solid var(--bord
     </div>
     <div class="form-row">
       <div class="form-group"><label class="form-label">Teléfono</label><input class="form-input" type="tel" id="cl-telefono" placeholder="+56 9..."></div>
-      <div class="form-group"><label class="form-label">Cumpleaños</label><input class="form-input" type="text" id="cl-bday" placeholder="DD/MM/AAAA" maxlength="10" oninput="formatBday(this)"></div>
+      <div class="form-group">
+        <label class="form-label">Cumpleaños</label>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+          <select class="form-select" id="cl-bday-dia"><option value="">Día</option><option value="01">1</option><option value="02">2</option><option value="03">3</option><option value="04">4</option><option value="05">5</option><option value="06">6</option><option value="07">7</option><option value="08">8</option><option value="09">9</option><option value="10">10</option><option value="11">11</option><option value="12">12</option><option value="13">13</option><option value="14">14</option><option value="15">15</option><option value="16">16</option><option value="17">17</option><option value="18">18</option><option value="19">19</option><option value="20">20</option><option value="21">21</option><option value="22">22</option><option value="23">23</option><option value="24">24</option><option value="25">25</option><option value="26">26</option><option value="27">27</option><option value="28">28</option><option value="29">29</option><option value="30">30</option><option value="31">31</option></select>
+          <select class="form-select" id="cl-bday-mes"><option value="">Mes</option><option value="01">Enero</option><option value="02">Febrero</option><option value="03">Marzo</option><option value="04">Abril</option><option value="05">Mayo</option><option value="06">Junio</option><option value="07">Julio</option><option value="08">Agosto</option><option value="09">Septiembre</option><option value="10">Octubre</option><option value="11">Noviembre</option><option value="12">Diciembre</option></select>
+        </div>
+      </div>
     </div>
     <div class="form-group">
       <label class="form-label">Servicio favorito</label>
@@ -645,19 +654,51 @@ async function addMovimiento(rec) {
 // ═══════════════════════════════════════════════════════════
 const fmt = n => '$' + Math.round(n).toLocaleString('es-CL');
 const fmtD = s => { const d = new Date(s + 'T12:00:00'); return d.toLocaleDateString('es-CL', { day: 'numeric', month: 'short' }); };
+function normalizarFecha(val) {
+  if (!val) return '';
+  const s = val.toString().trim();
+  // YYYY-MM-DD
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+  // DD/MM/YYYY
+  const p = s.split('/');
+  if (p.length === 3 && p[2].length === 4) return p[2] + '-' + p[1].padStart(2,'0') + '-' + p[0].padStart(2,'0');
+  // Date string largo (Wed Apr 29 2026...)
+  try {
+    const dt = new Date(s);
+    if (!isNaN(dt)) {
+      return dt.getFullYear() + '-' +
+             String(dt.getMonth()+1).padStart(2,'0') + '-' +
+             String(dt.getDate()).padStart(2,'0');
+    }
+  } catch(e) {}
+  return '';
+}
+
 const fmtDLong = s => {
   if (!s) return '';
-  let iso = s.toString().trim();
-  // DD/MM/AAAA → ISO
-  if (iso.includes('/')) {
-    const p = iso.split('/');
-    if (p.length === 3 && p[2].length === 4) iso = p[2] + '-' + p[1].padStart(2,'0') + '-' + p[0].padStart(2,'0');
-  }
-  // Debe quedar YYYY-MM-DD
-  if (!/^\d{4}-\d{2}-\d{2}/.test(iso)) return '';
+  const iso = normalizarFecha(s.toString().trim());
+  if (!iso) return '';
   const d = new Date(iso + 'T12:00:00');
   if (isNaN(d)) return '';
   return d.toLocaleDateString('es-CL', { day: 'numeric', month: 'long', year: 'numeric' });
+};
+
+// Solo día y mes — para cumpleaños
+const fmtBday = s => {
+  if (!s) return '';
+  const str = s.toString().trim();
+  // Formato 0000-MM-DD (solo día y mes)
+  const m0 = str.match(/^0000-(\d{2})-(\d{2})$/);
+  if (m0) {
+    const meses = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+    return parseInt(m0[2]) + ' de ' + meses[parseInt(m0[1])-1];
+  }
+  // Formato ISO completo YYYY-MM-DD
+  const iso = normalizarFecha(str);
+  if (!iso) return '';
+  const d = new Date(iso + 'T12:00:00');
+  if (isNaN(d)) return '';
+  return d.toLocaleDateString('es-CL', { day: 'numeric', month: 'long' });
 };
 const today = () => new Date().toISOString().slice(0, 10);
 const curMonth = () => new Date().toISOString().slice(0, 7);
@@ -723,17 +764,27 @@ function renderInicio() {
   document.getElementById('bh-month').textContent = now.toLocaleDateString('es-CL', { month: 'long', year: 'numeric' });
   document.getElementById('inicio-fecha').textContent = now.toLocaleDateString('es-CL', { weekday: 'long', day: 'numeric', month: 'long' });
 
-  const upcoming = clientes.filter(c => c.pcita && c.pcita >= today()).sort((a, b) => a.pcita.localeCompare(b.pcita)).slice(0, 3);
+  const todayISO = today();
+  const upcoming = clientes
+    .map(c => ({ ...c, _pcitaISO: normalizarFecha((c.pcita||'').toString()) }))
+    .filter(c => c._pcitaISO && c._pcitaISO >= todayISO)
+    .sort((a,b) => a._pcitaISO.localeCompare(b._pcitaISO))
+    .slice(0, 3);
   const citasEl = document.getElementById('proximas-list');
   citasEl.innerHTML = upcoming.length
     ? upcoming.map(c => `<div class="tx-item" style="cursor:pointer" onclick="verCliente('${c.id}')">
         <div class="tx-icon i" style="background:var(--gold-l);font-size:16px;">📅</div>
-        <div class="tx-info"><div class="tx-name">${escape(fullName(c))}</div><div class="tx-meta">${fmtDLong(c.pcita)} · ${escape(c.servicio||'Servicio')}</div></div>
-        <div style="font-size:11px;color:var(--gold);font-weight:600;">${fmtD(c.pcita)}</div>
+        <div class="tx-info"><div class="tx-name">${escape(fullName(c))}</div><div class="tx-meta">${fmtDLong(c._pcitaISO)} · ${escape(c.servicio||'Servicio')}</div></div>
+        <div style="font-size:11px;color:var(--gold);font-weight:600;">${fmtD(c._pcitaISO)}</div>
       </div>`).join('')
     : '<div class="empty"><div class="empty-icon">📅</div><div class="empty-text">Sin citas próximas agendadas</div></div>';
 
-  renderTxList('rec-list', [...txs].reverse().slice(0, 5));
+  const txsOrdenados = [...txs].sort((a,b) => {
+    const fa = normalizarFecha(a.fecha||'') || a.fecha || '';
+    const fb = normalizarFecha(b.fecha||'') || b.fecha || '';
+    return fb.localeCompare(fa);
+  });
+  renderTxList('rec-list', txsOrdenados.slice(0, 5));
 }
 
 function renderRegistros() {
@@ -749,8 +800,12 @@ function setRegMonth(m) { document.getElementById('reg-tabs').dataset.sel = m; r
 
 function renderTxList(id, items) {
   const el = document.getElementById(id);
-  // Siempre ordenar: más reciente primero
-  const sorted = [...items].sort((a,b) => (b.fecha||'').localeCompare(a.fecha||''));
+  // Ordenar: más reciente primero — convertir fecha a ISO para comparar
+  const sorted = [...items].sort((a,b) => {
+    const fa = normalizarFecha(a.fecha||'') || a.fecha || '';
+    const fb = normalizarFecha(b.fecha||'') || b.fecha || '';
+    return fb.localeCompare(fa);
+  });
   items = sorted;
   if (!items.length) { el.innerHTML = '<div class="empty"><div class="empty-icon">💅</div><div class="empty-text">Sin movimientos aún.<br>¡Registra tu primer servicio!</div></div>'; return; }
   el.innerHTML = items.map(t => {
@@ -775,7 +830,8 @@ function renderClientes() {
   if (!filtered.length) { el.innerHTML = '<div class="empty"><div class="empty-icon">👤</div><div class="empty-text">No se encontraron clientes</div></div>'; return; }
   const todayStr = today();
   el.innerHTML = filtered.map(c => {
-    const isBday = c.bday && c.bday.slice(5) === todayStr.slice(5);
+    const bdaySlice = c.bday ? (c.bday.startsWith('0000-') ? c.bday.slice(5) : c.bday.slice(5)) : '';
+    const isBday = bdaySlice && bdaySlice === todayStr.slice(5);
     const pcitaISO = c.pcita ? normalizarFecha(c.pcita) : '';
     const hasCita = pcitaISO && pcitaISO >= todayStr;
     const nombreC = (c.nombre + ' ' + (c.apellido||'')).trim().toLowerCase();
@@ -795,7 +851,7 @@ function renderClientes() {
         </div>
         <div class="client-meta">${svcCount} servicio${svcCount!==1?'s':''} · ${escape(c.servicio||'Sin servicio fijo')}${c.tel?' · '+escape(c.tel):''}</div>
       </div>
-      ${hasCita ? `<span class="client-badge cita">📅 ${fmtD(pcitaISO)}</span>` : ''}
+      ${hasCita && pcitaISO ? `<span class="client-badge cita">📅 ${fmtD(pcitaISO)}</span>` : ''}
     </div>`;
   }).join('');
 }
@@ -824,7 +880,7 @@ function verCliente(id) {
     </div>
     <div class="section"><div class="card">
       <div class="info-row"><span class="info-key">Servicio favorito</span><span class="info-val">${escape(c.servicio||'—')}</span></div>
-      ${c.bday && fmtDLong(c.bday) ? `<div class="info-row"><span class="info-key">Cumpleaños</span><span class="info-val">🎂 ${fmtDLong(c.bday)}</span></div>` : c.bday ? `<div class="info-row"><span class="info-key">Cumpleaños</span><span class="info-val">🎂 ${c.bday}</span></div>` : ''}
+      ${c.bday && fmtDLong(c.bday) ? `<div class="info-row"><span class="info-key">Cumpleaños</span><span class="info-val">🎂 ${fmtBday(c.bday)}</span></div>` : ''}
       <div class="info-row"><span class="info-key">Próxima cita</span><span class="info-val">${c.pcita?'📅 '+fmtDLong(c.pcita):'Sin agendar'}</span></div>
       <div class="info-row"><span class="info-key">Total facturado</span><span class="info-val" style="color:var(--sage)">${fmt(total)}</span></div>
       <div class="info-row"><span class="info-key">Visitas</span><span class="info-val">${historial.length} servicio${historial.length!==1?'s':''}</span></div>
@@ -1185,7 +1241,9 @@ function openNuevoCliente(editId = null) {
   document.getElementById('cl-nombre').value = c?.nombre || '';
   document.getElementById('cl-apellido').value = c?.apellido || '';
   document.getElementById('cl-telefono').value = c?.tel || '';
-  document.getElementById('cl-bday').value = c ? bdayToDisplay(c.bday) : '';
+  const bdParts = c && c.bday ? c.bday.replace('0000-','').split('-') : ['',''];
+  document.getElementById('cl-bday-dia').value = bdParts[1] || '';
+  document.getElementById('cl-bday-mes').value = bdParts[0] || '';
   document.getElementById('cl-servicio').value = c?.servicio || '';
   document.getElementById('cl-notas').value = c?.notas || '';
   const pp = document.getElementById('photo-pick');
@@ -1235,12 +1293,14 @@ function guardarCliente() {
     c.nombre = nombre;
     c.apellido = document.getElementById('cl-apellido').value.trim();
     c.tel = document.getElementById('cl-telefono').value.trim();
-    c.bday = bdayToISO(document.getElementById('cl-bday').value);
+    const bdDia = document.getElementById('cl-bday-dia').value;
+    const bdMes = document.getElementById('cl-bday-mes').value;
+    c.bday = bdDia && bdMes ? '0000-' + bdMes + '-' + bdDia : '';
     c.servicio = document.getElementById('cl-servicio').value;
     c.notas = document.getElementById('cl-notas').value.trim();
     if (tempPhotoData) c.foto = tempPhotoData;
   } else {
-    clientes.push({ id: 'c' + Date.now(), nombre, apellido: document.getElementById('cl-apellido').value.trim(), tel: document.getElementById('cl-telefono').value.trim(), bday: bdayToISO(document.getElementById('cl-bday').value), servicio: document.getElementById('cl-servicio').value, notas: document.getElementById('cl-notas').value.trim(), foto: tempPhotoData || '', pcita: '', visitas: 0 });
+    clientes.push({ id: 'c' + Date.now(), nombre, apellido: document.getElementById('cl-apellido').value.trim(), tel: document.getElementById('cl-telefono').value.trim(), bday: (()=>{ const d=document.getElementById('cl-bday-dia').value; const m=document.getElementById('cl-bday-mes').value; return d&&m?'0000-'+m+'-'+d:''; })(), servicio: document.getElementById('cl-servicio').value, notas: document.getElementById('cl-notas').value.trim(), foto: tempPhotoData || '', pcita: '', visitas: 0 });
   }
   // datos en memoria — Sheet se sincroniza abajo
   // Cerrar modal inmediatamente — sincronizar Sheet en background
@@ -1331,25 +1391,6 @@ async function recargarDesdeSheet() {
   }
 }
 
-function normalizarFecha(val) {
-  if (!val) return '';
-  const s = val.toString().trim();
-  // YYYY-MM-DD
-  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
-  // DD/MM/YYYY
-  const p = s.split('/');
-  if (p.length === 3 && p[2].length === 4) return p[2] + '-' + p[1].padStart(2,'0') + '-' + p[0].padStart(2,'0');
-  // Date string largo (Wed Apr 29 2026...)
-  try {
-    const dt = new Date(s);
-    if (!isNaN(dt)) {
-      return dt.getFullYear() + '-' +
-             String(dt.getMonth()+1).padStart(2,'0') + '-' +
-             String(dt.getDate()).padStart(2,'0');
-    }
-  } catch(e) {}
-  return '';
-}
 
 async function init() {
   fillTiposSelect(); // defaults mientras carga
