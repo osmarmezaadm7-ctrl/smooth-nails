@@ -241,6 +241,10 @@ nav{height:var(--nav-h);background:var(--card);border-top:0.5px solid var(--bord
         <div class="bh-mini"><div class="bh-mini-label">Egresos</div><div class="bh-mini-val" id="bh-egr">$0</div></div>
         <div class="bh-mini"><div class="bh-mini-label">Servicios</div><div class="bh-mini-val" id="bh-svc">0</div></div>
       </div>
+      <div style="margin-top:10px;position:relative;z-index:1;display:flex;align-items:center;justify-content:space-between;">
+        <div style="font-size:11px;color:rgba(255,255,255,.75);">Saldo acumulado total</div>
+        <div style="font-size:15px;font-weight:600;color:#fff;" id="bh-saldo-total">$0</div>
+      </div>
       <div class="sync-badge" id="sync-badge">✓ Sincronizado con Sheet</div>
     </div>
     <div class="sheet-banner" onclick="openSheet()">
@@ -798,8 +802,19 @@ const fmtBday = s => {
   if (isNaN(d)) return '';
   return d.toLocaleDateString('es-CL', { day: 'numeric', month: 'long' });
 };
-const today = () => new Date().toISOString().slice(0, 10);
-const curMonth = () => new Date().toISOString().slice(0, 7);
+const today = () => {
+  const now = new Date();
+  return now.getFullYear() + '-' +
+    String(now.getMonth() + 1).padStart(2, '0') + '-' +
+    String(now.getDate()).padStart(2, '0');
+};
+// Usar hora local de Chile (no UTC) para evitar cambio de día/mes prematuro
+const curMonth = () => {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, '0');
+  return y + '-' + m;
+};
 const initials = c => ((c.nombre || '')[0] || '') + ((c.apellido || '')[0] || '');
 const fullName = c => [c.nombre, c.apellido].filter(Boolean).join(' ');
 const escape = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -947,10 +962,17 @@ function renderInicio() {
   const tI = ing.reduce((a, t) => a + (parseFloat(t.monto)||0), 0);
   const tE = egr.reduce((a, t) => a + (parseFloat(t.monto)||0), 0);
   const svcCount = ing.filter(t => esServicio(t.tipo_nombre||t.tipoI||'')).length;
+
+  // Saldo acumulado total — todos los registros de todos los meses
+  const totalTodosI = txs.filter(t => t.tipo === 'Ingreso').reduce((a,t) => a+(parseFloat(t.monto)||0), 0);
+  const totalTodosE = txs.filter(t => t.tipo === 'Egreso').reduce((a,t) => a+(parseFloat(t.monto)||0), 0);
+  const saldoTotal = totalTodosI - totalTodosE;
+
   document.getElementById('bh-amount').textContent = fmt(tI - tE);
   document.getElementById('bh-ing').textContent = fmt(tI);
   document.getElementById('bh-egr').textContent = fmt(tE);
   document.getElementById('bh-svc').textContent = svcCount;
+  document.getElementById('bh-saldo-total').textContent = fmt(saldoTotal);
   // Notificaciones de cumpleaños
   renderBirthdayNotifs();
 
