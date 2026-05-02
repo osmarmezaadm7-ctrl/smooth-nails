@@ -1947,10 +1947,9 @@ async function guardarMovimiento() {
       const pcitaISO = normalizarFecha((c.pcita || '').toString());
       // Limpiar si la cita es hoy o ya pasó
       if (pcitaISO && pcitaISO <= todayISO) {
-        clientes[idxCli].pcita      = '';
-        clientes[idxCli].hora_cita  = '';
-        clientes[idxCli].lugar_cita = '';
-        clientes[idxCli].dir_cita   = '';
+        clientes[idxCli].pcita     = '';
+        clientes[idxCli].hora_cita = '';
+        clientes[idxCli].dir_cita  = '';
         // Actualizar en Sheet en background
         if (appsScriptURL) {
           apiPost({ accion: 'saveCliente', ...clientes[idxCli] }).catch(() => {});
@@ -2213,8 +2212,8 @@ async function recargarDesdeSheet() {
     // Preservar datos locales de cita si no vienen de Sheet todavía
     const citaLocales = {};
     clientes.forEach(c => {
-      if (c.hora_cita || c.lugar_cita || c.dir_cita) {
-        citaLocales[c.id] = { hora_cita: c.hora_cita, lugar_cita: c.lugar_cita, dir_cita: c.dir_cita };
+      if (c.hora_cita || c.dir_cita) {
+        citaLocales[c.id] = { hora_cita: c.hora_cita, dir_cita: c.dir_cita };
       }
     });
 
@@ -2224,10 +2223,9 @@ async function recargarDesdeSheet() {
       const local = citaLocales[c.id] || {};
       return {
         ...c,
-        foto:       fotoSheet || fotoLocal,
-        hora_cita:  normalizarHora(c.hora_cita || local.hora_cita || ''),
-        lugar_cita: c.lugar_cita || local.lugar_cita || '',
-        dir_cita:   c.dir_cita  || local.dir_cita  || ''
+        foto:      fotoSheet || fotoLocal,
+        hora_cita: normalizarHora(c.hora_cita || local.hora_cita || ''),
+        dir_cita:  c.dir_cita || local.dir_cita || ''
       };
     });
 
@@ -2398,13 +2396,11 @@ async function confirmarCita() {
   // Guardar hora, lugar y dirección en cliente local
   const idxC = clientes.findIndex(x => x.id === _clienteActivo.id);
   if (idxC >= 0) {
-    clientes[idxC].hora_cita  = hora;
-    clientes[idxC].lugar_cita = _lugarCita;
-    clientes[idxC].dir_cita   = dir;
+    clientes[idxC].hora_cita = hora;
+    clientes[idxC].dir_cita  = dir;
   }
-  _clienteActivo.hora_cita  = hora;
-  _clienteActivo.lugar_cita = _lugarCita;
-  _clienteActivo.dir_cita   = dir;
+  _clienteActivo.hora_cita = hora;
+  _clienteActivo.dir_cita  = dir;
 
   // Actualizar próxima cita en Sheet
   if (appsScriptURL) {
@@ -2419,8 +2415,11 @@ async function confirmarCita() {
       await apiPost({ accion: 'saveCliente', ...clienteParaGuardar });
       const idx = clientes.findIndex(x => x.id === _clienteActivo.id);
       if (idx >= 0) {
-        clientes[idx].pcita = fecha;
-        _clienteActivo.pcita = fecha;
+        clientes[idx].pcita      = fecha;
+        clientes[idx].hora_cita  = hora;
+        clientes[idx].dir_cita   = dir;
+        clientes[idx].lugar_cita = _lugarCita;
+        _clienteActivo.pcita     = fecha;
       }
     } catch(e) {}
   }
