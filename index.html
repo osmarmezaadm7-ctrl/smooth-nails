@@ -154,6 +154,13 @@ nav{height:var(--nav-h);background:var(--card);border-top:0.5px solid var(--bord
 .photo-thumb{aspect-ratio:1;border-radius:10px;overflow:hidden;background:var(--rose-l);display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;}
 .photo-thumb img{width:100%;height:100%;object-fit:cover;}
 /* LIGHTBOX */
+.frase-modal{display:none;position:fixed;inset:0;background:rgba(200,71,106,.92);z-index:800;align-items:center;justify-content:center;padding:30px;animation:fadeIn .3s ease;}
+.frase-modal.open{display:flex;}
+.frase-card{background:white;border-radius:24px;padding:32px 28px;text-align:center;max-width:340px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.3);}
+.frase-emoji{font-size:48px;margin-bottom:16px;}
+.frase-texto{font-family:var(--fs);font-size:20px;color:var(--ink);line-height:1.4;margin-bottom:10px;font-style:italic;}
+.frase-sub{font-size:13px;color:var(--rose);font-weight:600;letter-spacing:.05em;text-transform:uppercase;margin-bottom:24px;}
+.frase-close{padding:12px 32px;background:var(--rose);color:white;border:none;border-radius:20px;font-size:15px;font-weight:600;font-family:var(--ff);cursor:pointer;}
 .lightbox{display:none;position:fixed;inset:0;background:rgba(0,0,0,.93);z-index:900;align-items:center;justify-content:center;flex-direction:column;}
 .lightbox.open{display:flex;}
 .lightbox-img{max-width:96vw;max-height:82vh;object-fit:contain;border-radius:10px;}
@@ -241,7 +248,9 @@ nav{height:var(--nav-h);background:var(--card);border-top:0.5px solid var(--bord
     <div class="pg-header">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;">
         <div><div class="pg-title">Smooth <em>Nails</em></div><div class="pg-sub" id="inicio-fecha"></div></div>
-        <div style="width:38px;height:38px;border-radius:50%;background:var(--rose-l);border:1.5px solid var(--rose-m);display:flex;align-items:center;justify-content:center;font-family:var(--fs);font-size:16px;color:var(--rose);cursor:pointer;" onclick="goTo('s-clientes')">M</div>
+        <div onclick="mostrarFrase()" title="¡Toca para una sorpresa! 🎀"
+          style="width:38px;height:38px;border-radius:50%;background:linear-gradient(135deg,var(--rose-l),var(--gold-l));border:1.5px solid var(--rose-m);display:flex;align-items:center;justify-content:center;font-family:var(--fs);font-size:16px;color:var(--rose);cursor:pointer;transition:transform .15s;box-shadow:0 2px 8px rgba(200,71,106,.2);"
+          onmousedown="this.style.transform='scale(.9)'" onmouseup="this.style.transform='scale(1)'" ontouchstart="this.style.transform='scale(.9)'" ontouchend="this.style.transform='scale(1)'">M</div>
       </div>
     </div>
     <div id="cita-notif-container"></div>
@@ -2214,6 +2223,26 @@ async function getParamsFromSheet() {
 }
 
 // ═══════════════════════════════════════════════════════════
+// FRASE MOTIVADORA
+// ═══════════════════════════════════════════════════════════
+const FRASES_MOTIVADORAS = [{"frase": "Tus manos crean arte, tu esfuerzo crea el futuro ✨", "sub": "Sigue brillando"}, {"frase": "Cada uña pintada es una sonrisa que dejas en el mundo 💅", "sub": "Tú lo haces posible"}, {"frase": "El éxito se construye servicio a servicio 🌸", "sub": "Vas muy bien"}, {"frase": "Pequeño negocio, gran corazón 💖", "sub": "Orgullosa de ti"}, {"frase": "Tu talento + tu dedicación = magia pura ✨", "sub": "Imparable"}, {"frase": "Hoy es un gran día para brillar 💅", "sub": "Smooth Nails 🌸"}, {"frase": "Cada clienta feliz es tu mejor publicidad 🌟", "sub": "Sigue así"}, {"frase": "Las grandes empresas empezaron siendo pequeñas 💪", "sub": "Tú puedes"}, {"frase": "Tu pasión se nota en cada trabajo 🎨", "sub": "Eres increíble"}, {"frase": "El mejor momento para emprender fue ayer, el segundo mejor es hoy 🚀", "sub": "Adelante"}, {"frase": "Crea con amor, trabaja con pasión 💕", "sub": "Smooth Nails"}, {"frase": "Una buena manicure puede cambiarle el día a alguien ✨", "sub": "Eso lo haces tú"}];
+const EMOJIS_FRASE = ['💅','✨','🌸','💖','🎨','🌟','💪','🚀','💕','🎀','💎','🌺'];
+
+function mostrarFrase() {
+  const idx = Math.floor(Math.random() * FRASES_MOTIVADORAS.length);
+  const f = FRASES_MOTIVADORAS[idx];
+  const emoji = EMOJIS_FRASE[Math.floor(Math.random() * EMOJIS_FRASE.length)];
+  document.getElementById('frase-emoji').textContent = emoji;
+  document.getElementById('frase-texto').textContent = f.frase;
+  document.getElementById('frase-sub').textContent = f.sub;
+  document.getElementById('frase-modal').classList.add('open');
+}
+
+function closeFrase() {
+  document.getElementById('frase-modal').classList.remove('open');
+}
+
+// ═══════════════════════════════════════════════════════════
 // LIGHTBOX FOTOS
 // ═══════════════════════════════════════════════════════════
 let _lightboxIdx = 0;
@@ -2293,6 +2322,16 @@ async function init() {
 
 init();
 </script>
+<!-- MODAL FRASE MOTIVADORA -->
+<div class="frase-modal" id="frase-modal" onclick="if(event.target===this)closeFrase()">
+  <div class="frase-card">
+    <div class="frase-emoji" id="frase-emoji">💅</div>
+    <div class="frase-texto" id="frase-texto"></div>
+    <div class="frase-sub" id="frase-sub"></div>
+    <button class="frase-close" onclick="closeFrase()">¡A brillar! ✨</button>
+  </div>
+</div>
+
 <!-- LIGHTBOX FOTOS -->
 <div class="lightbox" id="lightbox" onclick="cerrarLightbox(event)">
   <button class="lightbox-close" onclick="closeLightbox()">×</button>
