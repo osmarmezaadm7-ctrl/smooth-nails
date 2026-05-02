@@ -1556,15 +1556,17 @@ function selectCliente(id) {
 document.addEventListener('click', e => { if (!e.target.closest('.autocomplete-wrap, .tooltip-wrap')) { document.getElementById('ac-list').classList.remove('open'); document.querySelectorAll('.tooltip').forEach(t => t.classList.remove('open')); } });
 
 async function guardarMovimiento() {
+  // btn debe declararse primero para usarse en validaciones
+  const btn = document.getElementById('btn-guardar');
+
   const fecha = document.getElementById('f-fecha').value;
   const monto = parseFloat(document.getElementById('f-monto').value);
   if (!fecha || !monto || monto <= 0) {
-    btn.disabled = false;
-    showStatus('reg-status', '⚠️ Por favor completa fecha y monto', 'err');
+    mostrarErrorCliente('⚠️ Por favor completa fecha y monto.', null);
     return;
   }
 
-  // Si es servicio, el cliente es obligatorio (a menos que se haya elegido continuar)
+  // Si es servicio, el cliente es obligatorio
   if (currentTipo === 'Ingreso' && !_skipClienteValidation) {
     const tipoSel = document.getElementById('f-tipo-i').value;
     if (esServicio(tipoSel)) {
@@ -1572,20 +1574,16 @@ async function guardarMovimiento() {
 
       // Caso 1: campo vacío
       if (!nombreCliente) {
-        btn.disabled = false;
         mostrarErrorCliente('⚠️ Debes ingresar el nombre del cliente para registrar un servicio.', null);
         document.getElementById('f-cliente').focus();
         return;
       }
 
-      // Caso 2: texto escrito — verificar coincidencia EXACTA en la agenda
-      // Solo se acepta si fue seleccionado del autocomplete (campo data-id) O coincide exactamente
+      // Caso 2: verificar si existe en la agenda
       const clienteInput = document.getElementById('f-cliente');
       const clienteIdSel = clienteInput.dataset.selectedId || '';
       const nombreLower = nombreCliente.toLowerCase();
 
-      // Buscar cliente: por id seleccionado del autocomplete, nombre completo exacto,
-      // o nombre parcial (primer nombre)
       const clienteExacto = clientes.find(c =>
         c.id === clienteIdSel ||
         fullName(c).toLowerCase() === nombreLower ||
@@ -1594,17 +1592,15 @@ async function guardarMovimiento() {
       );
 
       if (!clienteExacto) {
-        btn.disabled = false;
         mostrarErrorCliente(null, nombreCliente);
         return;
       }
-      // Autocompletar el nombre completo si se ingresó parcial
+      // Autocompletar nombre completo si se ingresó parcial
       clienteInput.value = fullName(clienteExacto);
       clienteInput.dataset.selectedId = clienteExacto.id;
     }
   }
 
-  const btn = document.getElementById('btn-guardar');
   btn.disabled = true;
 
   // Construir registro con estructura correcta
