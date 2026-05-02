@@ -153,6 +153,27 @@ nav{height:var(--nav-h);background:var(--card);border-top:0.5px solid var(--bord
 .photo-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:10px;}
 .photo-thumb{aspect-ratio:1;border-radius:10px;overflow:hidden;background:var(--rose-l);display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;}
 .photo-thumb img{width:100%;height:100%;object-fit:cover;}
+/* BANNER PERFIL CLIENTE */
+.perfil-banner{margin:0 20px 14px;border-radius:14px;padding:12px 14px;display:flex;align-items:center;justify-content:space-between;gap:10px;}
+.perfil-banner.cita{background:var(--sage-l);border:1.5px solid var(--sage-m);}
+.perfil-banner.bday{background:var(--gold-l);border:1.5px solid var(--gold-m);}
+.perfil-banner-txt{font-size:13px;font-weight:500;flex:1;}
+.perfil-banner.cita .perfil-banner-txt{color:var(--sage-d);}
+.perfil-banner.bday .perfil-banner-txt{color:var(--gold);}
+.perfil-banner-btn{padding:7px 12px;color:white;border:none;border-radius:20px;font-size:12px;font-weight:600;font-family:var(--ff);cursor:pointer;white-space:nowrap;flex-shrink:0;}
+.perfil-banner.cita .perfil-banner-btn{background:var(--sage);}
+.perfil-banner.bday .perfil-banner-btn{background:var(--gold);}
+/* AGENDA */
+.agenda-item{background:var(--card);border:0.5px solid var(--border);border-radius:16px;padding:14px 16px;margin-bottom:10px;display:flex;gap:14px;align-items:flex-start;}
+.agenda-fecha-box{background:var(--rose-l);border-radius:10px;padding:8px 10px;text-align:center;min-width:46px;flex-shrink:0;}
+.agenda-fecha-dia{font-family:var(--fs);font-size:22px;color:var(--rose);line-height:1;}
+.agenda-fecha-mes{font-size:10px;color:var(--rose-d);text-transform:uppercase;font-weight:600;margin-top:2px;}
+.agenda-info{flex:1;min-width:0;}
+.agenda-cliente{font-size:15px;font-weight:600;color:var(--ink);}
+.agenda-servicio{font-size:13px;color:var(--ink3);margin-top:2px;}
+.agenda-hora{font-size:12px;color:var(--rose);font-weight:600;margin-top:4px;}
+.agenda-hoy{border-color:var(--sage-m);background:var(--sage-l);}
+.agenda-hoy .agenda-fecha-box{background:var(--sage);}.agenda-hoy .agenda-fecha-dia{color:white;}.agenda-hoy .agenda-fecha-mes{color:rgba(255,255,255,.8);}
 /* LIGHTBOX */
 .frase-modal{display:none;position:fixed;inset:0;background:rgba(200,71,106,.92);z-index:800;align-items:center;justify-content:center;padding:30px;animation:fadeIn .3s ease;}
 .frase-modal.open{display:flex;}
@@ -315,6 +336,15 @@ nav{height:var(--nav-h);background:var(--card);border-top:0.5px solid var(--bord
     <div id="detalle-content"></div>
   </div>
 
+  <!-- AGENDA -->
+  <div class="screen" id="s-agenda">
+    <div class="pg-header">
+      <div class="pg-title">Agenda</div>
+      <div class="pg-sub" id="agenda-sub">Próximas citas</div>
+    </div>
+    <div class="section" id="agenda-content"></div>
+  </div>
+
   <!-- REPORTES -->
   <div class="screen" id="s-reportes">
     <div class="pg-header"><div class="pg-title">Reportes</div><div class="pg-sub">Análisis financiero</div></div>
@@ -376,6 +406,9 @@ nav{height:var(--nav-h);background:var(--card);border-top:0.5px solid var(--bord
   </button>
   <button class="nb" id="nb-clientes" onclick="navTo('s-clientes','nb-clientes')">
     <svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg><span>Clientes</span>
+  </button>
+  <button class="nb" id="nb-agenda" onclick="navTo('s-agenda','nb-agenda')">
+    <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg><span>Agenda</span>
   </button>
   <button class="nb" id="nb-reportes" onclick="navTo('s-reportes','nb-reportes')">
     <svg viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg><span>Reportes</span>
@@ -900,7 +933,7 @@ function goTo(id) {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   document.getElementById(id).classList.add('active');
   currentScreen = id;
-  const nav = { 's-inicio':'nb-inicio','s-registros':'nb-registros','s-clientes':'nb-clientes','s-reportes':'nb-reportes','s-config':'nb-config' };
+  const nav = { 's-inicio':'nb-inicio','s-registros':'nb-registros','s-clientes':'nb-clientes','s-agenda':'nb-agenda','s-reportes':'nb-reportes','s-config':'nb-config' };
   document.querySelectorAll('.nb').forEach(b => b.classList.remove('active'));
   if (nav[id]) document.getElementById(nav[id]).classList.add('active');
   renderScreen(id);
@@ -926,19 +959,37 @@ function renderScreen(id) {
   if (id === 's-inicio') renderInicio();
   else if (id === 's-registros') renderRegistros();
   else if (id === 's-clientes') renderClientes();
+  else if (id === 's-agenda') renderAgenda();
   else if (id === 's-reportes') renderReportes();
   else if (id === 's-config') renderConfig();
 }
 
-// Guardar notificaciones ya enviadas hoy (se limpian al cerrar el navegador)
+// Notificaciones enviadas — persisten en localStorage con fecha
+// Se limpian automáticamente al cambiar de día
+function _claveNotifs() {
+  return 'sn_notifs_' + today(); // clave única por día
+}
 function marcarNotifEnviada(key) {
-  const enviadas = JSON.parse(sessionStorage.getItem('sn_notifs_enviadas') || '[]');
-  if (!enviadas.includes(key)) { enviadas.push(key); }
-  sessionStorage.setItem('sn_notifs_enviadas', JSON.stringify(enviadas));
+  try {
+    const enviadas = JSON.parse(localStorage.getItem(_claveNotifs()) || '[]');
+    if (!enviadas.includes(key)) enviadas.push(key);
+    localStorage.setItem(_claveNotifs(), JSON.stringify(enviadas));
+    // Limpiar claves de días anteriores
+    Object.keys(localStorage).forEach(k => {
+      if (k.startsWith('sn_notifs_') && k !== _claveNotifs()) localStorage.removeItem(k);
+    });
+  } catch(e) {}
 }
 function notifYaEnviada(key) {
-  const enviadas = JSON.parse(sessionStorage.getItem('sn_notifs_enviadas') || '[]');
-  return enviadas.includes(key);
+  try {
+    const enviadas = JSON.parse(localStorage.getItem(_claveNotifs()) || '[]');
+    return enviadas.includes(key);
+  } catch(e) { return false; }
+}
+
+function descartarNotif(prefijo, clienteId, renderFn) {
+  marcarNotifEnviada(prefijo + clienteId);
+  if (typeof renderFn === 'function') renderFn();
 }
 
 function renderCitasHoy() {
@@ -958,16 +1009,19 @@ function renderCitasHoy() {
 
   container.innerHTML = `
     <div class="cita-notif">
-      <div class="cita-notif-title">📅 ¡Cita${citasHoy.length > 1 ? 's' : ''} hoy!</div>
+      <div class="cita-notif-title" style="justify-content:space-between;">
+        <span>📅 ¡Cita${citasHoy.length > 1 ? 's' : ''} hoy!</span>
+      </div>
       ${citasHoy.map(c => `
         <div class="cita-notif-item">
           <div>
             <div style="font-size:14px;font-weight:500;color:var(--ink);">${escape(fullName(c))}</div>
             <div style="font-size:11px;color:var(--ink3);">${escape(c.servicio||'Servicio')} — hoy</div>
           </div>
-          <button class="cita-notif-btn" onclick="enviarConfirmacionCita('${c.id}')">
-            💬 Confirmar
-          </button>
+          <div style="display:flex;gap:6px;align-items:center;">
+            <button class="cita-notif-btn" onclick="enviarConfirmacionCita('${c.id}')">💬 Confirmar</button>
+            <button onclick="descartarNotif('cita_','${c.id}',renderCitasHoy)" style="width:26px;height:26px;border-radius:50%;background:rgba(74,124,111,.15);color:var(--sage-d);border:none;font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;">×</button>
+          </div>
         </div>`).join('')}
     </div>`;
 }
@@ -1017,16 +1071,19 @@ function renderBirthdayNotifs() {
 
   container.innerHTML = `
     <div class="bday-notif">
-      <div class="bday-notif-title">🎂 ¡Cumpleaños hoy!</div>
+      <div class="bday-notif-title" style="justify-content:space-between;">
+        <span>🎂 ¡Cumpleaños hoy!</span>
+      </div>
       ${cumpleaneros.map(c => `
         <div class="bday-notif-item">
           <div>
             <div class="bday-notif-name">${escape(fullName(c))}</div>
             <div style="font-size:11px;color:var(--ink3);">Toca para enviar un regalo 🎁</div>
           </div>
-          <button class="bday-notif-btn" onclick="enviarDescuentoBday('${c.id}')">
-            🎁 Enviar descuento
-          </button>
+          <div style="display:flex;gap:6px;align-items:center;">
+            <button class="bday-notif-btn" onclick="enviarDescuentoBday('${c.id}')">🎁 Enviar</button>
+            <button onclick="descartarNotif('bday_','${c.id}',renderBirthdayNotifs)" style="width:26px;height:26px;border-radius:50%;background:rgba(176,128,48,.15);color:var(--gold);border:none;font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;">×</button>
+          </div>
         </div>`).join('')}
     </div>`;
 }
@@ -1036,7 +1093,7 @@ function enviarDescuentoBday(clienteId) {
   if (!c) return;
   if (!c.tel) { alert('Esta clienta no tiene teléfono registrado'); return; }
   // Marcar como enviada — se ocultará cuando se confirme el regalo
-  sessionStorage.setItem('bday_pendiente_id', clienteId);
+  localStorage.setItem('bday_pendiente_id', clienteId);
 
   // Mostrar modal con opciones de regalo
   document.getElementById('regalo-bday-subtitle').textContent = '🎂 Para ' + fullName(c);
@@ -1076,10 +1133,10 @@ function confirmarRegalo(clienteId, regaloIdx) {
     `📍 ${DIRECCION_ESTUDIO}`
   );
   // Ocultar notificación de cumpleaños de este cliente
-  const bdayPendienteId = sessionStorage.getItem('bday_pendiente_id');
+  const bdayPendienteId = localStorage.getItem('bday_pendiente_id');
   if (bdayPendienteId) {
     marcarNotifEnviada('bday_' + bdayPendienteId);
-    sessionStorage.removeItem('bday_pendiente_id');
+    localStorage.removeItem('bday_pendiente_id');
     renderBirthdayNotifs();
   }
   closeModal('modal-regalo-bday');
@@ -1236,6 +1293,28 @@ async function verCliente(id) {
   const total = historial.reduce((a, t) => a + (parseFloat(t.monto)||0), 0);
   const fotos = await cargarFotosIDB(id);
   document.getElementById('detalle-content').innerHTML = `
+    ${(()=>{
+      const todayStr = today();
+      const pcitaISO = normalizarFecha((c.pcita||'').toString());
+      const citaHoy = pcitaISO === todayStr;
+      // Cumpleaños hoy
+      let bdayHoy = false;
+      if (c.bday) {
+        const b = c.bday.toString().trim();
+        const mDDMM = b.match(/^(\d{1,2})\/(\d{1,2})$/);
+        if (mDDMM) bdayHoy = todayStr.slice(5) === mDDMM[2].padStart(2,'0') + '-' + mDDMM[1].padStart(2,'0');
+      }
+      let banners = '';
+      if (citaHoy) banners += `<div class="perfil-banner cita">
+        <span class="perfil-banner-txt">📅 ¡Tiene cita hoy!</span>
+        <button class="perfil-banner-btn" onclick="enviarConfirmacionCitaAgenda('${id}')">💬 Confirmar</button>
+      </div>`;
+      if (bdayHoy) banners += `<div class="perfil-banner bday">
+        <span class="perfil-banner-txt">🎂 ¡Cumpleaños hoy!</span>
+        <button class="perfil-banner-btn" onclick="enviarDescuentoBday('${id}')">🎁 Enviar regalo</button>
+      </div>`;
+      return banners;
+    })()}
     <div class="detail-avatar-big">${c.foto ? `<img src="${c.foto}">` : (initials(c)||'👤')}</div>
     <div class="detail-name">${escape(fullName(c))}</div>
     <div class="detail-phone">${escape(c.tel||'Sin teléfono')}</div>
@@ -1386,6 +1465,92 @@ function renderReportes() {
     </div>`;
 }
 function setRepMonth(m) { document.getElementById('rep-tabs').dataset.sel = m; renderReportes(); }
+
+function renderAgenda() {
+  const todayStr = today();
+  // Ordenar clientes por pcita ascendente, filtrando los sin cita
+  const conCita = clientes
+    .filter(c => c.pcita && c.pcita.trim())
+    .map(c => ({ ...c, _pcitaISO: normalizarFecha(c.pcita.toString()) }))
+    .filter(c => c._pcitaISO)
+    .sort((a, b) => a._pcitaISO.localeCompare(b._pcitaISO));
+
+  const pasadas = conCita.filter(c => c._pcitaISO < todayStr);
+  const proximas = conCita.filter(c => c._pcitaISO >= todayStr);
+
+  document.getElementById('agenda-sub').textContent =
+    proximas.length + ' cita' + (proximas.length !== 1 ? 's' : '') + ' próxima' + (proximas.length !== 1 ? 's' : '');
+
+  const el = document.getElementById('agenda-content');
+
+  if (!conCita.length) {
+    el.innerHTML = '<div class="empty"><div class="empty-icon">📅</div><div class="empty-text">Sin citas agendadas.<br>Agenda desde el perfil de cada clienta.</div></div>';
+    return;
+  }
+
+  function agendaCard(c) {
+    const fecha = new Date(c._pcitaISO + 'T12:00:00');
+    const dia = fecha.getDate();
+    const mes = fecha.toLocaleDateString('es-CL', { month: 'short' }).replace('.','').toUpperCase();
+    const isHoy = c._pcitaISO === todayStr;
+    const hora = c.hora_cita || '';
+    return `<div class="agenda-item${isHoy ? ' agenda-hoy' : ''}" onclick="verCliente('${c.id}')">
+      <div class="agenda-fecha-box">
+        <div class="agenda-fecha-dia">${dia}</div>
+        <div class="agenda-fecha-mes">${mes}</div>
+      </div>
+      <div class="agenda-info">
+        <div class="agenda-cliente">${escape(fullName(c))}${isHoy ? ' <span style="font-size:11px;background:var(--sage);color:white;padding:2px 7px;border-radius:20px;font-weight:600;">HOY</span>' : ''}</div>
+        <div class="agenda-servicio">💅 ${escape(c.servicio || 'Servicio')}</div>
+        ${hora ? `<div class="agenda-hora">🕐 ${hora}</div>` : ''}
+        ${c.tel ? `<div style="font-size:11px;color:var(--ink3);margin-top:3px;">📞 ${escape(c.tel)}</div>` : ''}
+      </div>
+      <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end;">
+        ${c.tel ? `<button onclick="event.stopPropagation();enviarConfirmacionCitaAgenda('${c.id}')" style="padding:6px 10px;background:var(--sage);color:white;border:none;border-radius:20px;font-size:11px;font-weight:600;font-family:var(--ff);cursor:pointer;">💬 WSP</button>` : ''}
+        <button onclick="event.stopPropagation();openAgendarCita('${c.id}',true)" style="padding:6px 10px;background:var(--rose-l);color:var(--rose-d);border:none;border-radius:20px;font-size:11px;font-weight:600;font-family:var(--ff);cursor:pointer;">🔄</button>
+      </div>
+    </div>`;
+  }
+
+  let html = '';
+  if (proximas.length) {
+    html += '<div style="font-size:12px;font-weight:600;color:var(--ink3);text-transform:uppercase;letter-spacing:.06em;padding:0 0 10px;">Próximas</div>';
+    html += proximas.map(agendaCard).join('');
+  }
+  if (pasadas.length) {
+    html += '<div style="font-size:12px;font-weight:600;color:var(--ink3);text-transform:uppercase;letter-spacing:.06em;padding:16px 0 10px;">Pasadas</div>';
+    html += pasadas.map(agendaCard).join('');
+  }
+  el.innerHTML = html;
+}
+
+function enviarConfirmacionCitaAgenda(clienteId) {
+  // Misma lógica que enviarConfirmacionCita pero sin marcar como enviada
+  // (ya fue descartada del inicio, pero puede querer enviar igual desde agenda)
+  const c = clientes.find(x => x.id === clienteId);
+  if (!c || !c.tel) { alert('Esta clienta no tiene teléfono registrado'); return; }
+  const tel = limpiarTel(c.tel);
+  const pcitaISO = normalizarFecha((c.pcita||'').toString());
+  const fechaStr = pcitaISO
+    ? new Date(pcitaISO + 'T12:00:00').toLocaleDateString('es-CL', { weekday:'long', day:'numeric', month:'long' })
+    : 'próximamente';
+  const hora = c.hora_cita ? ' a las ' + c.hora_cita : '';
+  const msg = encodeURIComponent(
+    `¡Hola ${c.nombre}! 💅
+
+` +
+    `Te recordamos tu cita en Smooth Nails el *${fechaStr}${hora}*.
+
+` +
+    `📍 ${DIRECCION_ESTUDIO}
+
+` +
+    `¡Te esperamos! 🌸
+` +
+    `— Martina, Smooth Nails`
+  );
+  abrirWSP(tel, msg);
+}
 
 function renderConfig() {
   const url = localStorage.getItem('sn_script_url') || '';
@@ -2148,13 +2313,19 @@ async function confirmarCita() {
   const horaStr = `${hh}:${mm} hrs`;
   const lugarStr = _lugarCita === 'estudio' ? `el estudio (${dir})` : `tu domicilio (${dir})`;
 
+  // Guardar hora en cliente local
+  const idxC = clientes.findIndex(x => x.id === _clienteActivo.id);
+  if (idxC >= 0) clientes[idxC].hora_cita = hora;
+  _clienteActivo.hora_cita = hora;
+
   // Actualizar próxima cita en Sheet
   if (appsScriptURL) {
     try {
       await apiPost({
         accion: 'saveCliente',
         ..._clienteActivo,
-        pcita: fecha
+        pcita: fecha,
+        hora_cita: hora
       });
       // Actualizar localmente
       const idx = clientes.findIndex(x => x.id === _clienteActivo.id);
