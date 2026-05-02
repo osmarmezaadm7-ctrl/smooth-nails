@@ -647,60 +647,45 @@ let dashboardData = null; // datos desde Sheet
 function loadData(k, def) { try { return JSON.parse(localStorage.getItem(k)) || def; } catch(e) { return def; } }
 function saveData(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch(e) {} }
 
-// ── IndexedDB para fotos de trabajos (más persistente que localStorage) ──
-let _fotosDB = null;
-function abrirFotosDB() {
-  if (_fotosDB) return Promise.resolve(_fotosDB);
-  return new Promise((resolve, reject) => {
-    const req = indexedDB.open('SmoothNailsFotos', 1);
-    req.onupgradeneeded = e => {
-      const db = e.target.result;
-      if (!db.objectStoreNames.contains('fotos')) {
-        db.createObjectStore('fotos', { keyPath: 'clienteId' });
-      }
-    };
-    req.onsuccess = e => { _fotosDB = e.target.result; resolve(_fotosDB); };
-    req.onerror = () => reject(req.error);
-  });
+// ── Fotos de trabajos — localStorage con prefijo dedicado ──
+// Se usa una clave separada por cliente para máxima compatibilidad
+function guardarFotosIDB(clienteId, fotos) {
+  try {
+    // Guardar cada foto por separado para evitar límite de localStorage
+    const keys = [];
+    fotos.forEach((foto, i) => {
+      const key = 'snf_' + clienteId + '_' + i;
+      localStorage.setItem(key, foto);
+      keys.push(key);
+    });
+    // Guardar índice de claves
+    localStorage.setItem('snf_idx_' + clienteId, JSON.stringify(keys));
+    // Limpiar fotos eliminadas
+    const oldKeys = JSON.parse(localStorage.getItem('snf_idx_' + clienteId + '_old') || '[]');
+    oldKeys.forEach(k => { if (!keys.includes(k)) localStorage.removeItem(k); });
+    localStorage.setItem('snf_idx_' + clienteId + '_old', JSON.stringify(keys));
+  } catch(e) {
+    console.warn('No se pudieron guardar fotos:', e);
+  }
+  return Promise.resolve();
 }
 
-async function guardarFotosIDB(clienteId, fotos) {
+function cargarFotosIDB(clienteId) {
   try {
-    const db = await abrirFotosDB();
-    return new Promise((resolve, reject) => {
-      const tx = db.transaction('fotos', 'readwrite');
-      tx.objectStore('fotos').put({ clienteId, fotos });
-      tx.oncomplete = resolve;
-      tx.onerror = reject;
-    });
-  } catch(e) {
-    // Fallback a localStorage
-    saveData('sn_fotos_' + clienteId, fotos);
-  }
-}
-
-async function cargarFotosIDB(clienteId) {
-  try {
-    const db = await abrirFotosDB();
-    return new Promise((resolve) => {
-      const tx = db.transaction('fotos', 'readonly');
-      const req = tx.objectStore('fotos').get(clienteId);
-      req.onsuccess = () => {
-        const resultado = req.result ? req.result.fotos : [];
-        // Migrar desde localStorage si hay datos ahí
-        const local = loadData('sn_fotos_' + clienteId, []);
-        if (local.length && !resultado.length) {
-          guardarFotosIDB(clienteId, local);
-          resolve(local);
-        } else {
-          resolve(resultado);
-        }
-      };
-      req.onerror = () => resolve(loadData('sn_fotos_' + clienteId, []));
-    });
-  } catch(e) {
-    return loadData('sn_fotos_' + clienteId, []);
-  }
+    const keysStr = localStorage.getItem('snf_idx_' + clienteId);
+    if (keysStr) {
+      const keys = JSON.parse(keysStr);
+      const fotos = keys.map(k => localStorage.getItem(k)).filter(Boolean);
+      if (fotos.length) return Promise.resolve(fotos);
+    }
+    // Fallback: clave antigua sn_fotos_
+    const old = loadData('sn_fotos_' + clienteId, []);
+    if (old.length) {
+      guardarFotosIDB(clienteId, old); // migrar al nuevo formato
+      return Promise.resolve(old);
+    }
+  } catch(e) {}
+  return Promise.resolve([]);
 }
 // Cache en memoria (no persiste entre sesiones — Sheet es la verdad)
 let _cache = {};
@@ -1243,11 +1228,15 @@ async function verCliente(id) {
       <div class="section-hd"><span class="section-tt">Fotos de trabajos</span><button class="section-lk" onclick="addFoto('${id}')">+ Añadir</button></div>
       <input type="file" id="foto-file-${id}" accept="image/*" style="display:none" onchange="handleFotoTrabajo(event,'${id}')">
       <div class="photo-grid" id="photo-grid-${id}">
-        ${fotos.map((f,i)=>`
-          <div class="photo-thumb">
-            <img src="${f}" onclick="abrirLightbox(${JSON.stringify(fotos)}, ${i})" style="width:100%;height:100%;object-fit:cover;">
-            <button onclick="event.stopPropagation();eliminarFoto('${id}',${i})" style="position:absolute;top:4px;right:4px;width:22px;height:22px;border-radius:50%;background:rgba(0,0,0,.6);color:white;border:none;font-size:13px;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1;z-index:2;">×</button>
-          </div>`).join('')}
+        ${(()=>{
+          window._fotosClienteActual = fotos;
+          return fotos.map((f,i)=>
+            '<div class="photo-thumb">' +
+            '<img src="' + f + '" onclick="abrirLightboxIdx(' + i + ')" style="width:100%;height:100%;object-fit:cover;">' +
+            '<button onclick="event.stopPropagation();eliminarFoto(\'' + id + '\',' + i + ')" style="position:absolute;top:4px;right:4px;width:22px;height:22px;border-radius:50%;background:rgba(0,0,0,.6);color:white;border:none;font-size:13px;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1;z-index:2;">×</button>' +
+            '</div>'
+          ).join('');
+        })()}
         <div class="photo-thumb photo-add" onclick="addFoto('${id}')">+</div>
       </div>
     </div>
@@ -1278,7 +1267,7 @@ function handleFotoTrabajo(event, id) {
   const file = event.target.files[0];
   if (!file) return;
   const reader = new FileReader();
-  reader.onload = e => compressImage(e.target.result, 800, async data => {
+  reader.onload = e => compressImage(e.target.result, 600, async data => {
     const fotos = await cargarFotosIDB(id);
     fotos.unshift(data);
     if (fotos.length > 20) fotos.pop();
@@ -2227,29 +2216,31 @@ async function getParamsFromSheet() {
 // ═══════════════════════════════════════════════════════════
 // LIGHTBOX FOTOS
 // ═══════════════════════════════════════════════════════════
-let _lightboxFotos = [];
 let _lightboxIdx = 0;
 
-function abrirLightbox(fotos, idx) {
-  _lightboxFotos = fotos;
+function abrirLightboxIdx(idx) {
+  const fotos = window._fotosClienteActual || [];
+  if (!fotos.length) return;
   _lightboxIdx = idx;
-  actualizarLightbox();
-  document.getElementById('lightbox').classList.add('open');
+  const lb = document.getElementById('lightbox');
+  const img = document.getElementById('lightbox-img');
+  const counter = document.getElementById('lightbox-counter');
+  const nav = document.querySelector('.lightbox-nav');
+  img.src = fotos[_lightboxIdx];
+  counter.textContent = (_lightboxIdx + 1) + ' / ' + fotos.length;
+  if (nav) nav.style.display = fotos.length > 1 ? 'flex' : 'none';
+  lb.classList.add('open');
   document.body.style.overflow = 'hidden';
 }
 
-function actualizarLightbox() {
-  document.getElementById('lightbox-img').src = _lightboxFotos[_lightboxIdx];
-  document.getElementById('lightbox-counter').textContent =
-    (_lightboxIdx + 1) + ' / ' + _lightboxFotos.length;
-  // Ocultar navegación si solo hay una foto
-  const nav = document.querySelector('.lightbox-nav');
-  if (nav) nav.style.display = _lightboxFotos.length > 1 ? 'flex' : 'none';
-}
-
 function lightboxNav(dir) {
-  _lightboxIdx = (_lightboxIdx + dir + _lightboxFotos.length) % _lightboxFotos.length;
-  actualizarLightbox();
+  const fotos = window._fotosClienteActual || [];
+  if (!fotos.length) return;
+  _lightboxIdx = (_lightboxIdx + dir + fotos.length) % fotos.length;
+  const img = document.getElementById('lightbox-img');
+  const counter = document.getElementById('lightbox-counter');
+  img.src = fotos[_lightboxIdx];
+  counter.textContent = (_lightboxIdx + 1) + ' / ' + fotos.length;
 }
 
 function closeLightbox() {
