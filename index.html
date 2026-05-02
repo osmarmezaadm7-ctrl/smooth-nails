@@ -205,6 +205,11 @@ nav{height:var(--nav-h);background:var(--card);border-top:0.5px solid var(--bord
 .photo-pick img{width:100%;height:100%;object-fit:cover;}
 ::-webkit-scrollbar{width:3px;}
 ::-webkit-scrollbar-thumb{background:var(--rose-m);border-radius:2px;}
+.cita-notif{margin:0 16px 12px;background:var(--sage-l);border:1.5px solid var(--sage-m);border-radius:16px;padding:14px 16px;animation:fadeIn .3s ease;}
+.cita-notif-title{font-size:13px;font-weight:600;color:var(--sage-d);margin-bottom:10px;display:flex;align-items:center;gap:6px;}
+.cita-notif-item{display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:0.5px solid var(--sage-m);}
+.cita-notif-item:last-child{border-bottom:none;padding-bottom:0;}
+.cita-notif-btn{padding:7px 12px;background:var(--sage);color:white;border:none;border-radius:20px;font-size:12px;font-weight:600;font-family:var(--ff);cursor:pointer;white-space:nowrap;}
 .bday-notif{margin:0 16px 12px;background:var(--gold-l);border:1.5px solid var(--gold-m);border-radius:16px;padding:14px 16px;animation:fadeIn .3s ease;}
 .bday-notif-title{font-size:13px;font-weight:600;color:var(--gold);margin-bottom:10px;display:flex;align-items:center;gap:6px;}
 .bday-notif-item{display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:0.5px solid var(--gold-m);}
@@ -231,6 +236,7 @@ nav{height:var(--nav-h);background:var(--card);border-top:0.5px solid var(--bord
         <div style="width:38px;height:38px;border-radius:50%;background:var(--rose-l);border:1.5px solid var(--rose-m);display:flex;align-items:center;justify-content:center;font-family:var(--fs);font-size:16px;color:var(--rose);cursor:pointer;" onclick="goTo('s-clientes')">M</div>
       </div>
     </div>
+    <div id="cita-notif-container"></div>
     <div id="bday-notif-container"></div>
     <div class="balance-hero">
       <div class="bh-label">Balance del mes</div>
@@ -614,7 +620,8 @@ const REGALOS_DEFAULT = [
   '💎 Diseño nail art de regalo en tu próxima cita'
 ];
 let regalos_bday = JSON.parse(localStorage.getItem('sn_regalos_bday') || 'null') || [...REGALOS_DEFAULT];
-let _clienteActivo = null; // cliente seleccionado en modal contactar/agendar
+let _clienteActivo = null;
+let _skipClienteValidation = false; // para continuar sin cliente en agenda // cliente seleccionado en modal contactar/agendar
 let _lugarCita = 'estudio'; // 'estudio' o 'domicilio'
 let tiposIngreso = [...TIPOS_INGRESO_DEFAULT];
 let tiposEgreso = [...TIPOS_EGRESO_DEFAULT];
@@ -866,6 +873,52 @@ function renderScreen(id) {
   else if (id === 's-config') renderConfig();
 }
 
+function renderCitasHoy() {
+  const todayStr = today();
+  const citasHoy = clientes.filter(c => {
+    if (!c.pcita) return false;
+    const pcitaISO = normalizarFecha(c.pcita.toString());
+    return pcitaISO === todayStr;
+  });
+
+  const container = document.getElementById('cita-notif-container');
+  if (!container) return;
+
+  if (!citasHoy.length) { container.innerHTML = ''; return; }
+
+  container.innerHTML = `
+    <div class="cita-notif">
+      <div class="cita-notif-title">📅 ¡Cita${citasHoy.length > 1 ? 's' : ''} hoy!</div>
+      ${citasHoy.map(c => `
+        <div class="cita-notif-item">
+          <div>
+            <div style="font-size:14px;font-weight:500;color:var(--ink);">${escape(fullName(c))}</div>
+            <div style="font-size:11px;color:var(--ink3);">${escape(c.servicio||'Servicio')} — hoy</div>
+          </div>
+          <button class="cita-notif-btn" onclick="enviarConfirmacionCita('${c.id}')">
+            💬 Confirmar
+          </button>
+        </div>`).join('')}
+    </div>`;
+}
+
+function enviarConfirmacionCita(clienteId) {
+  const c = clientes.find(x => x.id === clienteId);
+  if (!c) return;
+  if (!c.tel) { alert('Esta clienta no tiene teléfono registrado'); return; }
+  const tel = limpiarTel(c.tel);
+  const hoy = new Date();
+  const fechaStr = hoy.toLocaleDateString('es-CL', { weekday: 'long', day: 'numeric', month: 'long' });
+  const msg = encodeURIComponent(
+    `¡Hola ${c.nombre}! 💅\n\n` +
+    `Te recordamos que hoy *${fechaStr}* tienes tu cita en Smooth Nails.\n\n` +
+    `📍 ${DIRECCION_ESTUDIO}\n\n` +
+    `¡Te esperamos! 🌸\n` +
+    `— Martina, Smooth Nails`
+  );
+  abrirWSP(tel, msg);
+}
+
 function renderBirthdayNotifs() {
   const todayStr = today();
   const cumpleaneros = clientes.filter(c => {
@@ -973,7 +1026,8 @@ function renderInicio() {
   document.getElementById('bh-egr').textContent = fmt(tE);
   document.getElementById('bh-svc').textContent = svcCount;
   document.getElementById('bh-saldo-total').textContent = fmt(saldoTotal);
-  // Notificaciones de cumpleaños
+  // Notificaciones de citas hoy y cumpleaños
+  renderCitasHoy();
   renderBirthdayNotifs();
 
   const now = new Date();
@@ -1356,6 +1410,29 @@ function borrarDatos() {
 // ═══════════════════════════════════════════════════════════
 // MODAL REGISTRO
 // ═══════════════════════════════════════════════════════════
+function crearClienteDesdeRegistro(nombre) {
+  // Guardar nombre para prellenar y cerrar modal de registro
+  const partes = nombre.trim().split(' ');
+  closeModal('modal-registro');
+  // Abrir modal de nuevo cliente con el nombre prellenado
+  openNuevoCliente();
+  setTimeout(() => {
+    document.getElementById('cl-nombre').value = partes[0] || nombre;
+    if (partes.length > 1) {
+      document.getElementById('cl-apellido').value = partes.slice(1).join(' ');
+    }
+    // Guardar nombre para volver al registro después
+    sessionStorage.setItem('sn_pendiente_cliente', nombre);
+  }, 100);
+}
+
+function continuarSinCliente() {
+  // Limpiar el mensaje y continuar con el guardado
+  document.getElementById('reg-status').style.display = 'none';
+  _skipClienteValidation = true;
+  guardarMovimiento();
+}
+
 function openRegistro() {
   document.getElementById('f-fecha').value = today();
   document.getElementById('f-monto').value = '';
@@ -1449,10 +1526,51 @@ async function guardarMovimiento() {
     return;
   }
 
+  // Si es servicio, el cliente es obligatorio (a menos que se haya elegido continuar)
+  if (currentTipo === 'Ingreso' && !_skipClienteValidation) {
+    const tipoSel = document.getElementById('f-tipo-i').value;
+    if (esServicio(tipoSel)) {
+      const nombreCliente = document.getElementById('f-cliente').value.trim();
+      if (!nombreCliente) {
+        btn.disabled = false;
+        showStatus('reg-status', '⚠️ Debes ingresar el nombre del cliente para registrar un servicio', 'err');
+        document.getElementById('f-cliente').focus();
+        return;
+      }
+      // Verificar si el cliente existe en la agenda
+      const existe = clientes.some(c =>
+        fullName(c).toLowerCase() === nombreCliente.toLowerCase() ||
+        c.nombre.toLowerCase() === nombreCliente.toLowerCase()
+      );
+      if (!existe) {
+        btn.disabled = false;
+        // Ofrecer crear el cliente
+        showStatus('reg-status', `⚠️ "${nombreCliente}" no está en tu agenda`, 'err');
+        const statusEl = document.getElementById('reg-status');
+        statusEl.innerHTML = `
+          ⚠️ <strong>${nombreCliente}</strong> no está en tu agenda.<br>
+          <button onclick="crearClienteDesdeRegistro('${nombreCliente.replace(/'/g, "\'")}')"
+            style="margin-top:8px;padding:8px 14px;background:var(--rose);color:white;border:none;
+            border-radius:10px;font-size:13px;font-weight:600;font-family:var(--ff);cursor:pointer;width:100%;">
+            ➕ Crear cliente "${nombreCliente}"
+          </button>
+          <button onclick="continuarSinCliente()"
+            style="margin-top:6px;padding:7px 14px;background:none;color:var(--ink3);border:1.5px solid var(--border2);
+            border-radius:10px;font-size:12px;font-family:var(--ff);cursor:pointer;width:100%;">
+            Continuar sin registrar en agenda
+          </button>`;
+        statusEl.className = 'status-msg err';
+        statusEl.style.display = 'block';
+        return;
+      }
+    }
+  }
+
   const btn = document.getElementById('btn-guardar');
   btn.disabled = true;
 
   // Construir registro con estructura correcta
+  _skipClienteValidation = false; // reset
   const rec = { id: Date.now(), tipo: currentTipo, fecha, monto };
   if (currentTipo === 'Ingreso') {
     const tipoNombre = document.getElementById('f-tipo-i').value;
@@ -1673,7 +1791,20 @@ async function guardarCliente() {
   }
 
   // Cerrar después de mostrar el mensaje
-  setTimeout(() => closeModal('modal-cliente'), 1500);
+  setTimeout(() => {
+    closeModal('modal-cliente');
+    // Si venía desde un registro pendiente, volver a abrir el registro
+    const pendiente = sessionStorage.getItem('sn_pendiente_cliente');
+    if (pendiente) {
+      sessionStorage.removeItem('sn_pendiente_cliente');
+      setTimeout(() => {
+        openRegistro();
+        setTimeout(() => {
+          document.getElementById('f-cliente').value = pendiente;
+        }, 150);
+      }, 200);
+    }
+  }, 1500);
 }
 
 // ═══════════════════════════════════════════════════════════
