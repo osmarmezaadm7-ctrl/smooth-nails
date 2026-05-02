@@ -235,7 +235,7 @@ nav{height:var(--nav-h);background:var(--card);border-top:0.5px solid var(--bord
 .loading-logo em{color:var(--rose);font-style:italic;}
 .loading-bar{width:120px;height:3px;background:var(--rose-m);border-radius:2px;overflow:hidden;}
 .loading-fill{height:100%;background:var(--rose);border-radius:2px;animation:loadfill 1.4s ease infinite;}
-@keyframes loadfill{0%{width:0;margin-left:0}50%{width:100%;margin-left:0}100%{width:0;margin-left:100%}}
+@keyframes loadfill{0%{width:0;margin-left:0}60%{width:100%;margin-left:0}100%{width:0;margin-left:100%}}
 /* FOTO MODAL */
 .photo-pick{width:72px;height:72px;border-radius:50%;background:var(--rose-l);border:2px dashed var(--rose-m);display:flex;align-items:center;justify-content:center;margin:0 auto 16px;cursor:pointer;overflow:hidden;font-size:28px;color:var(--rose-m);}
 .photo-pick img{width:100%;height:100%;object-fit:cover;}
@@ -2001,8 +2001,11 @@ async function recargarClientes() {
       clientes.forEach(c => { if (c.foto && c.foto.startsWith('data:')) fotosLocales[c.id] = c.foto; });
       clientes = res.clientes.map(c => ({
         ...c,
-        foto: (c.foto && c.foto.startsWith('data:')) ? c.foto : (fotosLocales[c.id] || '')
+        foto:      (c.foto && c.foto.startsWith('data:')) ? c.foto : (fotosLocales[c.id] || ''),
+        hora_cita: c.hora_cita || ''
       }));
+      // Actualizar caché (sin fotos para no pesar)
+      saveData('sn_cli_cache', clientes.map(c => ({ ...c, foto: '' })));
     }
   } catch(e) {}
 }
@@ -2480,42 +2483,37 @@ function cerrarLightbox(e) {
 }
 
 async function init() {
-  fillTiposSelect(); // defaults mientras carga
-  getParamsFromSheet(); // cargar dirección del estudio
+  // ── PASO 1: Cargar caché local inmediatamente (instantáneo) ──
+  tiposIngreso = loadData('sn_tipos_i', TIPOS_INGRESO_DEFAULT);
+  tiposEgreso  = loadData('sn_tipos_e', TIPOS_EGRESO_DEFAULT);
+  txs          = loadData('sn_txs_cache', []);
+  clientes     = loadData('sn_cli_cache', []);
+  fillTiposSelect();
 
+  // ── PASO 2: Renderizar con caché y ocultar loading rápido ──
+  renderInicio();
+  const loading = document.getElementById('loading');
+  loading.style.opacity = '0';
+  loading.style.transition = 'opacity .25s';
+  setTimeout(() => loading.style.display = 'none', 250);
+
+  // ── PASO 3: Sincronizar con Sheet en background (no bloquea UI) ──
   if (appsScriptURL) {
-    try {
-      const ok = await recargarDesdeSheet();
+    getParamsFromSheet(); // sin await — no bloquea
+    recargarDesdeSheet().then(ok => {
       setSyncBadge(ok);
-      if (!ok) {
-        // Sin conexión — tipos desde cache
-        tiposIngreso = loadData('sn_tipos_i', TIPOS_INGRESO_DEFAULT);
-        tiposEgreso  = loadData('sn_tipos_e', TIPOS_EGRESO_DEFAULT);
-        fillTiposSelect();
+      if (ok) {
+        // Guardar en caché para próxima apertura
+        saveData('sn_txs_cache', txs);
+        saveData('sn_cli_cache', clientes.map(c => ({ ...c, foto: '' }))); // sin fotos para no pesar
+        renderInicio();
+        // Si estamos en otra pantalla, actualizar también
+        if (currentScreen !== 's-inicio') renderScreen(currentScreen);
       }
-    } catch(e) {
-      tiposIngreso = loadData('sn_tipos_i', TIPOS_INGRESO_DEFAULT);
-      tiposEgreso  = loadData('sn_tipos_e', TIPOS_EGRESO_DEFAULT);
-      fillTiposSelect();
-      setSyncBadge(false);
-    }
+    }).catch(() => setSyncBadge(false));
   } else {
-    // Sin URL configurada — tipos desde cache
-    tiposIngreso = loadData('sn_tipos_i', TIPOS_INGRESO_DEFAULT);
-    tiposEgreso  = loadData('sn_tipos_e', TIPOS_EGRESO_DEFAULT);
-    fillTiposSelect();
     setSyncBadge(false);
   }
-
-  renderInicio();
-
-  // Ocultar loading
-  setTimeout(() => {
-    const loading = document.getElementById('loading');
-    loading.style.opacity = '0';
-    loading.style.transition = 'opacity .3s';
-    setTimeout(() => loading.style.display = 'none', 300);
-  }, 700);
 }
 
 init();
