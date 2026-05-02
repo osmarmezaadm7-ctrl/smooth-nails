@@ -957,6 +957,7 @@ function openSheet() { window.open(SHEET_URL, '_blank'); }
 
 document.getElementById('fab-btn').addEventListener('click', () => {
   if (currentScreen === 's-clientes') openNuevoCliente();
+  else if (currentScreen === 's-agenda') abrirAgendarDesdeAgenda();
   else openRegistro();
 });
 
@@ -1480,6 +1481,30 @@ function renderReportes() {
 }
 function setRepMonth(m) { document.getElementById('rep-tabs').dataset.sel = m; renderReportes(); }
 
+function abrirAgendarDesdeAgenda() {
+  // Mostrar selector de cliente para agendar
+  if (!clientes.length) {
+    alert('Primero agrega clientes para poder agendar citas.');
+    goTo('s-clientes');
+    return;
+  }
+  // Crear un modal temporal de selección de cliente
+  const modal = document.getElementById('modal-sel-cliente-agenda');
+  if (modal) {
+    const list = document.getElementById('sel-cli-agenda-list');
+    list.innerHTML = clientes.map(c =>
+      `<div class="ac-item" onclick="seleccionarClienteAgenda('${c.id}')">${escape(fullName(c))}</div>`
+    ).join('');
+    modal.classList.add('open');
+  }
+}
+
+function seleccionarClienteAgenda(id) {
+  const modal = document.getElementById('modal-sel-cliente-agenda');
+  if (modal) modal.classList.remove('open');
+  openAgendarCita(id, false);
+}
+
 function renderAgenda() {
   const todayStr = today();
   // Ordenar clientes por pcita ascendente, filtrando los sin cita
@@ -1906,6 +1931,34 @@ async function guardarMovimiento() {
 
   // ── Optimistic UI: mostrar inmediatamente sin esperar Sheet ──
   txs.unshift(rec);
+
+  // ── Opción A: limpiar cita automáticamente si el servicio se realizó ──
+  if (rec.tipo === 'Ingreso' && rec.cliente) {
+    const todayISO = today();
+    const nombreRec = rec.cliente.trim().toLowerCase();
+    const idxCli = clientes.findIndex(c => {
+      const nombreC = fullName(c).toLowerCase();
+      const nombreS = c.nombre.toLowerCase();
+      return (nombreC === nombreRec || nombreS === nombreRec ||
+              nombreC.startsWith(nombreRec) || nombreRec.startsWith(nombreS));
+    });
+    if (idxCli >= 0) {
+      const c = clientes[idxCli];
+      const pcitaISO = normalizarFecha((c.pcita || '').toString());
+      // Limpiar si la cita es hoy o ya pasó
+      if (pcitaISO && pcitaISO <= todayISO) {
+        clientes[idxCli].pcita      = '';
+        clientes[idxCli].hora_cita  = '';
+        clientes[idxCli].lugar_cita = '';
+        clientes[idxCli].dir_cita   = '';
+        // Actualizar en Sheet en background
+        if (appsScriptURL) {
+          apiPost({ accion: 'saveCliente', ...clientes[idxCli] }).catch(() => {});
+        }
+      }
+    }
+  }
+
   renderInicio();
   renderScreen(currentScreen);
 
@@ -2157,17 +2210,24 @@ async function recargarDesdeSheet() {
         fotosLocales[c.id] = c.foto; // solo base64 local
       }
     });
-    // Preservar hora_cita local si no viene de Sheet todavía
-    const horasLocales = {};
-    clientes.forEach(c => { if (c.hora_cita) horasLocales[c.id] = c.hora_cita; });
+    // Preservar datos locales de cita si no vienen de Sheet todavía
+    const citaLocales = {};
+    clientes.forEach(c => {
+      if (c.hora_cita || c.lugar_cita || c.dir_cita) {
+        citaLocales[c.id] = { hora_cita: c.hora_cita, lugar_cita: c.lugar_cita, dir_cita: c.dir_cita };
+      }
+    });
 
     const clientesBase = (res.clientes || []).map(c => {
       const fotoSheet = c.foto && c.foto.startsWith('data:') ? c.foto : '';
       const fotoLocal = fotosLocales[c.id] || '';
+      const local = citaLocales[c.id] || {};
       return {
         ...c,
-        foto:      fotoSheet || fotoLocal,
-        hora_cita: normalizarHora(c.hora_cita || horasLocales[c.id] || '')
+        foto:       fotoSheet || fotoLocal,
+        hora_cita:  normalizarHora(c.hora_cita || local.hora_cita || ''),
+        lugar_cita: c.lugar_cita || local.lugar_cita || '',
+        dir_cita:   c.dir_cita  || local.dir_cita  || ''
       };
     });
 
@@ -2335,17 +2395,28 @@ async function confirmarCita() {
   const horaStr = `${hh}:${mm} hrs`;
   const lugarStr = _lugarCita === 'estudio' ? `el estudio (${dir})` : `tu domicilio (${dir})`;
 
-  // Guardar hora en cliente local
+  // Guardar hora, lugar y dirección en cliente local
   const idxC = clientes.findIndex(x => x.id === _clienteActivo.id);
-  if (idxC >= 0) clientes[idxC].hora_cita = hora;
-  _clienteActivo.hora_cita = hora;
+  if (idxC >= 0) {
+    clientes[idxC].hora_cita  = hora;
+    clientes[idxC].lugar_cita = _lugarCita;
+    clientes[idxC].dir_cita   = dir;
+  }
+  _clienteActivo.hora_cita  = hora;
+  _clienteActivo.lugar_cita = _lugarCita;
+  _clienteActivo.dir_cita   = dir;
 
   // Actualizar próxima cita en Sheet
   if (appsScriptURL) {
     try {
-      const clienteParaGuardar = { ..._clienteActivo, pcita: fecha, hora_cita: hora };
+      const clienteParaGuardar = {
+        ..._clienteActivo,
+        pcita:      fecha,
+        hora_cita:  hora,
+        lugar_cita: _lugarCita,
+        dir_cita:   dir
+      };
       await apiPost({ accion: 'saveCliente', ...clienteParaGuardar });
-      // Actualizar localmente
       const idx = clientes.findIndex(x => x.id === _clienteActivo.id);
       if (idx >= 0) {
         clientes[idx].pcita = fecha;
@@ -2532,6 +2603,17 @@ async function init() {
 
 init();
 </script>
+<!-- MODAL SELECCIONAR CLIENTE PARA AGENDAR -->
+<div class="modal-bg" id="modal-sel-cliente-agenda">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title">¿Para quién es la cita?</div>
+    <div class="modal-sub">Selecciona una clienta</div>
+    <div style="max-height:50vh;overflow-y:auto;border:1.5px solid var(--border2);border-radius:12px;margin-bottom:12px;" id="sel-cli-agenda-list"></div>
+    <button class="btn-secondary" onclick="closeModal('modal-sel-cliente-agenda')">Cancelar</button>
+  </div>
+</div>
+
 <!-- MODAL FRASE MOTIVADORA -->
 <div class="frase-modal" id="frase-modal" onclick="if(event.target===this)closeFrase()">
   <div class="frase-card">
