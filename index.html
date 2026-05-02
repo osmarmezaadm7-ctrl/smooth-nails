@@ -297,7 +297,7 @@ nav{height:var(--nav-h);background:var(--card);border-top:0.5px solid var(--bord
       <div class="sb-arr">→</div>
     </div>
     <div class="section">
-      <div class="section-hd"><span class="section-tt">Próximas citas</span><button class="section-lk" onclick="goTo('s-clientes')">Ver agenda</button></div>
+      <div class="section-hd"><span class="section-tt">Próximas citas</span><button class="section-lk" onclick="goTo('s-agenda')">Ver agenda</button></div>
       <div id="proximas-list"></div>
     </div>
     <div class="section">
@@ -2030,7 +2030,8 @@ async function guardarCliente() {
       servicio:  document.getElementById('cl-servicio').value,
       direccion: document.getElementById('cl-direccion').value.trim(),
       notas:     document.getElementById('cl-notas').value.trim(),
-      foto:      tempPhotoData || cExistente.foto || ''
+      foto:      tempPhotoData || cExistente.foto || '',
+      hora_cita: cExistente.hora_cita || '' // preservar hora agendada
     };
     // Actualizar en array local
     const idx = clientes.findIndex(x => x.id === editingClienteId);
@@ -2139,13 +2140,17 @@ async function recargarDesdeSheet() {
         fotosLocales[c.id] = c.foto; // solo base64 local
       }
     });
+    // Preservar hora_cita local si no viene de Sheet todavía
+    const horasLocales = {};
+    clientes.forEach(c => { if (c.hora_cita) horasLocales[c.id] = c.hora_cita; });
+
     const clientesBase = (res.clientes || []).map(c => {
-      // Prioridad foto: Sheet (si tiene base64 real) > local
       const fotoSheet = c.foto && c.foto.startsWith('data:') ? c.foto : '';
       const fotoLocal = fotosLocales[c.id] || '';
       return {
         ...c,
-        foto: fotoSheet || fotoLocal
+        foto:      fotoSheet || fotoLocal,
+        hora_cita: c.hora_cita || horasLocales[c.id] || ''
       };
     });
 
@@ -2321,12 +2326,8 @@ async function confirmarCita() {
   // Actualizar próxima cita en Sheet
   if (appsScriptURL) {
     try {
-      await apiPost({
-        accion: 'saveCliente',
-        ..._clienteActivo,
-        pcita: fecha,
-        hora_cita: hora
-      });
+      const clienteParaGuardar = { ..._clienteActivo, pcita: fecha, hora_cita: hora };
+      await apiPost({ accion: 'saveCliente', ...clienteParaGuardar });
       // Actualizar localmente
       const idx = clientes.findIndex(x => x.id === _clienteActivo.id);
       if (idx >= 0) {
