@@ -151,8 +151,16 @@ nav{height:var(--nav-h);background:var(--card);border-top:0.5px solid var(--bord
 .info-key{font-size:13px;color:var(--ink3);}
 .info-val{font-size:13px;font-weight:500;color:var(--ink);}
 .photo-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:10px;}
-.photo-thumb{aspect-ratio:1;border-radius:10px;overflow:hidden;background:var(--rose-l);display:flex;align-items:center;justify-content:center;cursor:pointer;}
+.photo-thumb{aspect-ratio:1;border-radius:10px;overflow:hidden;background:var(--rose-l);display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;}
 .photo-thumb img{width:100%;height:100%;object-fit:cover;}
+/* LIGHTBOX */
+.lightbox{display:none;position:fixed;inset:0;background:rgba(0,0,0,.93);z-index:900;align-items:center;justify-content:center;flex-direction:column;}
+.lightbox.open{display:flex;}
+.lightbox-img{max-width:96vw;max-height:82vh;object-fit:contain;border-radius:10px;}
+.lightbox-close{position:absolute;top:16px;right:16px;width:40px;height:40px;border-radius:50%;background:rgba(255,255,255,.15);color:white;border:none;font-size:22px;cursor:pointer;display:flex;align-items:center;justify-content:center;}
+.lightbox-nav{display:flex;gap:24px;margin-top:16px;}
+.lightbox-btn{padding:8px 20px;background:rgba(255,255,255,.15);color:white;border:none;border-radius:20px;font-size:14px;font-family:var(--ff);cursor:pointer;}
+.lightbox-counter{color:rgba(255,255,255,.6);font-size:13px;margin-top:8px;}
 .photo-add{border:1.5px dashed var(--rose-m);display:flex;align-items:center;justify-content:center;font-size:22px;color:var(--rose-m);}
 /* REPORTES */
 .period-tabs{display:flex;gap:8px;padding:0 16px 12px;overflow-x:auto;scrollbar-width:none;}
@@ -634,11 +642,66 @@ let currentScreen = 's-inicio';
 let dashboardData = null; // datos desde Sheet
 
 // ═══════════════════════════════════════════════════════════
-// STORAGE — localStorage solo para config (URL, tipos, fotos)
-// Los datos de negocio (txs, clientes) vienen SIEMPRE de Sheet
+// STORAGE — localStorage para config, IndexedDB para fotos
 // ═══════════════════════════════════════════════════════════
 function loadData(k, def) { try { return JSON.parse(localStorage.getItem(k)) || def; } catch(e) { return def; } }
 function saveData(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch(e) {} }
+
+// ── IndexedDB para fotos de trabajos (más persistente que localStorage) ──
+let _fotosDB = null;
+function abrirFotosDB() {
+  if (_fotosDB) return Promise.resolve(_fotosDB);
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open('SmoothNailsFotos', 1);
+    req.onupgradeneeded = e => {
+      const db = e.target.result;
+      if (!db.objectStoreNames.contains('fotos')) {
+        db.createObjectStore('fotos', { keyPath: 'clienteId' });
+      }
+    };
+    req.onsuccess = e => { _fotosDB = e.target.result; resolve(_fotosDB); };
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function guardarFotosIDB(clienteId, fotos) {
+  try {
+    const db = await abrirFotosDB();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction('fotos', 'readwrite');
+      tx.objectStore('fotos').put({ clienteId, fotos });
+      tx.oncomplete = resolve;
+      tx.onerror = reject;
+    });
+  } catch(e) {
+    // Fallback a localStorage
+    saveData('sn_fotos_' + clienteId, fotos);
+  }
+}
+
+async function cargarFotosIDB(clienteId) {
+  try {
+    const db = await abrirFotosDB();
+    return new Promise((resolve) => {
+      const tx = db.transaction('fotos', 'readonly');
+      const req = tx.objectStore('fotos').get(clienteId);
+      req.onsuccess = () => {
+        const resultado = req.result ? req.result.fotos : [];
+        // Migrar desde localStorage si hay datos ahí
+        const local = loadData('sn_fotos_' + clienteId, []);
+        if (local.length && !resultado.length) {
+          guardarFotosIDB(clienteId, local);
+          resolve(local);
+        } else {
+          resolve(resultado);
+        }
+      };
+      req.onerror = () => resolve(loadData('sn_fotos_' + clienteId, []));
+    });
+  } catch(e) {
+    return loadData('sn_fotos_' + clienteId, []);
+  }
+}
 // Cache en memoria (no persiste entre sesiones — Sheet es la verdad)
 let _cache = {};
 function cacheSet(k, v) { _cache[k] = v; }
@@ -1138,7 +1201,7 @@ function renderClientes() {
   }).join('');
 }
 
-function verCliente(id) {
+async function verCliente(id) {
   const c = clientes.find(x => x.id === id);
   if (!c) return;
   const nombreC = (c.nombre + ' ' + (c.apellido||'')).trim().toLowerCase();
@@ -1151,7 +1214,7 @@ function verCliente(id) {
            (tc && nombreC && (tc.startsWith(nombreSimple) || nombreC.startsWith(tc)));
   }).sort((a,b) => (b.fecha||'').localeCompare(a.fecha||''));
   const total = historial.reduce((a, t) => a + (parseFloat(t.monto)||0), 0);
-  const fotos = loadData('sn_fotos_' + id, []);
+  const fotos = await cargarFotosIDB(id);
   document.getElementById('detalle-content').innerHTML = `
     <div class="detail-avatar-big">${c.foto ? `<img src="${c.foto}">` : (initials(c)||'👤')}</div>
     <div class="detail-name">${escape(fullName(c))}</div>
@@ -1181,9 +1244,9 @@ function verCliente(id) {
       <input type="file" id="foto-file-${id}" accept="image/*" style="display:none" onchange="handleFotoTrabajo(event,'${id}')">
       <div class="photo-grid" id="photo-grid-${id}">
         ${fotos.map((f,i)=>`
-          <div class="photo-thumb" style="position:relative;">
-            <img src="${f}">
-            <button onclick="eliminarFoto('${id}',${i})" style="position:absolute;top:4px;right:4px;width:22px;height:22px;border-radius:50%;background:rgba(0,0,0,.6);color:white;border:none;font-size:13px;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1;">×</button>
+          <div class="photo-thumb">
+            <img src="${f}" onclick="abrirLightbox(${JSON.stringify(fotos)}, ${i})" style="width:100%;height:100%;object-fit:cover;">
+            <button onclick="event.stopPropagation();eliminarFoto('${id}',${i})" style="position:absolute;top:4px;right:4px;width:22px;height:22px;border-radius:50%;background:rgba(0,0,0,.6);color:white;border:none;font-size:13px;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1;z-index:2;">×</button>
           </div>`).join('')}
         <div class="photo-thumb photo-add" onclick="addFoto('${id}')">+</div>
       </div>
@@ -1204,22 +1267,22 @@ function verCliente(id) {
 
 function addFoto(id) { document.getElementById('foto-file-' + id).click(); }
 
-function eliminarFoto(clienteId, index) {
+async function eliminarFoto(clienteId, index) {
   if (!confirm('¿Eliminar esta foto?')) return;
-  const fotos = loadData('sn_fotos_' + clienteId, []);
+  const fotos = await cargarFotosIDB(clienteId);
   fotos.splice(index, 1);
-  saveData('sn_fotos_' + clienteId, fotos);
+  await guardarFotosIDB(clienteId, fotos);
   verCliente(clienteId);
 }
 function handleFotoTrabajo(event, id) {
   const file = event.target.files[0];
   if (!file) return;
   const reader = new FileReader();
-  reader.onload = e => compressImage(e.target.result, 400, data => {
-    const fotos = loadData('sn_fotos_' + id, []);
+  reader.onload = e => compressImage(e.target.result, 800, async data => {
+    const fotos = await cargarFotosIDB(id);
     fotos.unshift(data);
-    if (fotos.length > 12) fotos.pop();
-    saveData('sn_fotos_' + id, fotos);
+    if (fotos.length > 20) fotos.pop();
+    await guardarFotosIDB(id, fotos);
     verCliente(id);
   });
   reader.readAsDataURL(file);
@@ -2161,6 +2224,43 @@ async function getParamsFromSheet() {
   } catch(e) {}
 }
 
+// ═══════════════════════════════════════════════════════════
+// LIGHTBOX FOTOS
+// ═══════════════════════════════════════════════════════════
+let _lightboxFotos = [];
+let _lightboxIdx = 0;
+
+function abrirLightbox(fotos, idx) {
+  _lightboxFotos = fotos;
+  _lightboxIdx = idx;
+  actualizarLightbox();
+  document.getElementById('lightbox').classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+
+function actualizarLightbox() {
+  document.getElementById('lightbox-img').src = _lightboxFotos[_lightboxIdx];
+  document.getElementById('lightbox-counter').textContent =
+    (_lightboxIdx + 1) + ' / ' + _lightboxFotos.length;
+  // Ocultar navegación si solo hay una foto
+  const nav = document.querySelector('.lightbox-nav');
+  if (nav) nav.style.display = _lightboxFotos.length > 1 ? 'flex' : 'none';
+}
+
+function lightboxNav(dir) {
+  _lightboxIdx = (_lightboxIdx + dir + _lightboxFotos.length) % _lightboxFotos.length;
+  actualizarLightbox();
+}
+
+function closeLightbox() {
+  document.getElementById('lightbox').classList.remove('open');
+  document.body.style.overflow = '';
+}
+
+function cerrarLightbox(e) {
+  if (e.target === document.getElementById('lightbox')) closeLightbox();
+}
+
 async function init() {
   fillTiposSelect(); // defaults mientras carga
   getParamsFromSheet(); // cargar dirección del estudio
@@ -2202,5 +2302,16 @@ async function init() {
 
 init();
 </script>
+<!-- LIGHTBOX FOTOS -->
+<div class="lightbox" id="lightbox" onclick="cerrarLightbox(event)">
+  <button class="lightbox-close" onclick="closeLightbox()">×</button>
+  <img class="lightbox-img" id="lightbox-img" src="">
+  <div class="lightbox-nav">
+    <button class="lightbox-btn" onclick="lightboxNav(-1)">← Anterior</button>
+    <button class="lightbox-btn" onclick="lightboxNav(1)">Siguiente →</button>
+  </div>
+  <div class="lightbox-counter" id="lightbox-counter"></div>
+</div>
+
 </body>
 </html>
