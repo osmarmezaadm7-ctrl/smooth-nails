@@ -1410,48 +1410,46 @@ function borrarDatos() {
 // ═══════════════════════════════════════════════════════════
 // MODAL REGISTRO
 // ═══════════════════════════════════════════════════════════
+let _nombrePendienteCliente = '';
+
 function mostrarErrorCliente(msgSimple, nombreDesconocido) {
   const statusEl = document.getElementById('reg-status');
   statusEl.className = 'status-msg err';
   statusEl.style.display = 'block';
 
   if (msgSimple) {
-    // Error simple: campo vacío
-    statusEl.innerHTML = msgSimple;
+    statusEl.innerHTML = '<span>' + msgSimple + '</span>';
     return;
   }
 
-  // Error: nombre no reconocido — ofrecer crear o continuar
-  const nombreSafe = escape(nombreDesconocido);
-  statusEl.innerHTML = `
-    ⚠️ <strong>${nombreSafe}</strong> no está en tu agenda.<br>
-    <button onclick="crearClienteDesdeRegistro('${nombreDesconocido.replace(/'/g,"\'").replace(/"/g,'\"')}')"
-      style="margin-top:8px;padding:9px 14px;background:var(--rose);color:white;border:none;
-      border-radius:10px;font-size:13px;font-weight:600;font-family:var(--ff);cursor:pointer;width:100%;display:block;">
-      ➕ Crear cliente y continuar
-    </button>
-    <button onclick="continuarSinCliente()"
-      style="margin-top:6px;padding:8px 14px;background:none;color:var(--ink3);border:1.5px solid var(--border2);
-      border-radius:10px;font-size:12px;font-family:var(--ff);cursor:pointer;width:100%;display:block;">
-      Registrar sin agregar a agenda
-    </button>`;
+  _nombrePendienteCliente = nombreDesconocido || '';
+  statusEl.innerHTML =
+    '<div style="margin-bottom:8px;font-size:13px;">&#9888;&#65039; <strong>' + escape(nombreDesconocido) + '</strong> no est&aacute; en tu agenda.</div>' +
+    '<button id="btn-crear-cli-reg" style="padding:9px 14px;background:var(--rose);color:white;border:none;border-radius:10px;font-size:13px;font-weight:600;font-family:var(--ff);cursor:pointer;width:100%;display:block;margin-bottom:6px;">&#10133; Crear cliente y continuar</button>' +
+    '<button id="btn-skip-cli-reg" style="padding:8px 14px;background:none;color:var(--ink3);border:1.5px solid var(--border2);border-radius:10px;font-size:12px;font-family:var(--ff);cursor:pointer;width:100%;display:block;">Registrar sin agregar a agenda</button>';
+
+  requestAnimationFrame(function() {
+    var b1 = document.getElementById('btn-crear-cli-reg');
+    var b2 = document.getElementById('btn-skip-cli-reg');
+    if (b1) b1.onclick = function() { crearClienteDesdeRegistro(_nombrePendienteCliente); };
+    if (b2) b2.onclick = function() { continuarSinCliente(); };
+  });
 }
 
 function crearClienteDesdeRegistro(nombre) {
-  // Guardar nombre para prellenar y cerrar modal de registro
-  const partes = nombre.trim().split(' ');
+  var n = (nombre || _nombrePendienteCliente || '').trim();
+  var partes = n.split(' ');
+  sessionStorage.setItem('sn_pendiente_cliente', n);
   closeModal('modal-registro');
-  // Abrir modal de nuevo cliente con el nombre prellenado
-  openNuevoCliente();
-  setTimeout(() => {
-    document.getElementById('cl-nombre').value = partes[0] || nombre;
-    if (partes.length > 1) {
-      document.getElementById('cl-apellido').value = partes.slice(1).join(' ');
-    }
-    // Guardar nombre para volver al registro después
-    sessionStorage.setItem('sn_pendiente_cliente', nombre);
-  }, 100);
+  setTimeout(function() {
+    openNuevoCliente();
+    setTimeout(function() {
+      document.getElementById('cl-nombre').value = partes[0] || n;
+      document.getElementById('cl-apellido').value = partes.length > 1 ? partes.slice(1).join(' ') : '';
+    }, 200);
+  }, 250);
 }
+
 
 function continuarSinCliente() {
   // Limpiar el mensaje y continuar con el guardado
@@ -1584,9 +1582,15 @@ async function guardarMovimiento() {
       // Solo se acepta si fue seleccionado del autocomplete (campo data-id) O coincide exactamente
       const clienteInput = document.getElementById('f-cliente');
       const clienteIdSel = clienteInput.dataset.selectedId || '';
+      const nombreLower = nombreCliente.toLowerCase();
+
+      // Buscar cliente: por id seleccionado del autocomplete, nombre completo exacto,
+      // o nombre parcial (primer nombre)
       const clienteExacto = clientes.find(c =>
         c.id === clienteIdSel ||
-        fullName(c).toLowerCase() === nombreCliente.toLowerCase()
+        fullName(c).toLowerCase() === nombreLower ||
+        c.nombre.toLowerCase() === nombreLower ||
+        fullName(c).toLowerCase().startsWith(nombreLower)
       );
 
       if (!clienteExacto) {
@@ -1594,6 +1598,9 @@ async function guardarMovimiento() {
         mostrarErrorCliente(null, nombreCliente);
         return;
       }
+      // Autocompletar el nombre completo si se ingresó parcial
+      clienteInput.value = fullName(clienteExacto);
+      clienteInput.dataset.selectedId = clienteExacto.id;
     }
   }
 
