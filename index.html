@@ -930,11 +930,24 @@ function renderScreen(id) {
   else if (id === 's-config') renderConfig();
 }
 
+// Guardar notificaciones ya enviadas hoy (se limpian al cerrar el navegador)
+function marcarNotifEnviada(key) {
+  const enviadas = JSON.parse(sessionStorage.getItem('sn_notifs_enviadas') || '[]');
+  if (!enviadas.includes(key)) { enviadas.push(key); }
+  sessionStorage.setItem('sn_notifs_enviadas', JSON.stringify(enviadas));
+}
+function notifYaEnviada(key) {
+  const enviadas = JSON.parse(sessionStorage.getItem('sn_notifs_enviadas') || '[]');
+  return enviadas.includes(key);
+}
+
 function renderCitasHoy() {
   const todayStr = today();
   const citasHoy = clientes.filter(c => {
     if (!c.pcita) return false;
     const pcitaISO = normalizarFecha(c.pcita.toString());
+    // Ocultar si ya se envió confirmación hoy
+    if (notifYaEnviada('cita_' + c.id)) return false;
     return pcitaISO === todayStr;
   });
 
@@ -973,12 +986,16 @@ function enviarConfirmacionCita(clienteId) {
     `¡Te esperamos! 🌸\n` +
     `— Martina, Smooth Nails`
   );
+  // Marcar como enviada y ocultar notificación
+  marcarNotifEnviada('cita_' + clienteId);
+  renderCitasHoy();
   abrirWSP(tel, msg);
 }
 
 function renderBirthdayNotifs() {
   const todayStr = today();
   const cumpleaneros = clientes.filter(c => {
+    if (notifYaEnviada('bday_' + c.id)) return false;
     if (!c.bday) return false;
     const b = c.bday.toString().trim();
     // Formato DD/MM
@@ -1018,6 +1035,8 @@ function enviarDescuentoBday(clienteId) {
   const c = clientes.find(x => x.id === clienteId);
   if (!c) return;
   if (!c.tel) { alert('Esta clienta no tiene teléfono registrado'); return; }
+  // Marcar como enviada — se ocultará cuando se confirme el regalo
+  sessionStorage.setItem('bday_pendiente_id', clienteId);
 
   // Mostrar modal con opciones de regalo
   document.getElementById('regalo-bday-subtitle').textContent = '🎂 Para ' + fullName(c);
@@ -1056,6 +1075,13 @@ function confirmarRegalo(clienteId, regaloIdx) {
     `— Martina, Smooth Nails\n` +
     `📍 ${DIRECCION_ESTUDIO}`
   );
+  // Ocultar notificación de cumpleaños de este cliente
+  const bdayPendienteId = sessionStorage.getItem('bday_pendiente_id');
+  if (bdayPendienteId) {
+    marcarNotifEnviada('bday_' + bdayPendienteId);
+    sessionStorage.removeItem('bday_pendiente_id');
+    renderBirthdayNotifs();
+  }
   closeModal('modal-regalo-bday');
   abrirWSP(tel, msg);
 }
