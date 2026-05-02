@@ -852,6 +852,20 @@ async function addMovimiento(rec) {
 // ═══════════════════════════════════════════════════════════
 const fmt = n => '$' + Math.round(n).toLocaleString('es-CL');
 const fmtD = s => { const d = new Date(s + 'T12:00:00'); return d.toLocaleDateString('es-CL', { day: 'numeric', month: 'short' }); };
+function normalizarHora(val) {
+  if (!val) return '';
+  const s = val.toString().replace(/^'/, '').trim();
+  if (/^\d{1,2}:\d{2}$/.test(s)) return s;
+  try {
+    const d = new Date(s);
+    if (!isNaN(d) && d.getFullYear() < 1970) {
+      // Objeto Date del año 1899 de Sheets — extraer hora
+      return String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0');
+    }
+  } catch(e) {}
+  return s;
+}
+
 function normalizarFecha(val) {
   if (!val) return '';
   const s = val.toString().trim();
@@ -1493,7 +1507,7 @@ function renderAgenda() {
     const dia = fecha.getDate();
     const mes = fecha.toLocaleDateString('es-CL', { month: 'short' }).replace('.','').toUpperCase();
     const isHoy = c._pcitaISO === todayStr;
-    const hora = c.hora_cita || '';
+    const hora = normalizarHora(c.hora_cita || '');
     return `<div class="agenda-item${isHoy ? ' agenda-hoy' : ''}" onclick="verCliente('${c.id}')">
       <div class="agenda-fecha-box">
         <div class="agenda-fecha-dia">${dia}</div>
@@ -1534,7 +1548,7 @@ function enviarConfirmacionCitaAgenda(clienteId) {
   const fechaStr = pcitaISO
     ? new Date(pcitaISO + 'T12:00:00').toLocaleDateString('es-CL', { weekday:'long', day:'numeric', month:'long' })
     : 'próximamente';
-  const hora = c.hora_cita ? ' a las ' + c.hora_cita : '';
+  const hora = c.hora_cita ? ' a las ' + normalizarHora(c.hora_cita) : '';
   const msg = encodeURIComponent(
     `¡Hola ${c.nombre}! 💅
 
@@ -2153,7 +2167,7 @@ async function recargarDesdeSheet() {
       return {
         ...c,
         foto:      fotoSheet || fotoLocal,
-        hora_cita: c.hora_cita || horasLocales[c.id] || ''
+        hora_cita: normalizarHora(c.hora_cita || horasLocales[c.id] || '')
       };
     });
 
