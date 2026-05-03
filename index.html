@@ -445,7 +445,19 @@ nav{height:var(--nav-h);background:var(--card);border-top:0.5px solid var(--bord
       <button class="tgl-btn" id="btn-e" onclick="setTipo('Egreso')">🛒 Egreso</button>
     </div>
 
-    <!-- INGRESO: flujo lógico — servicios → cliente → monto → medio → nota → opcionales -->
+    <!-- Fecha y Monto — compartidos por Ingreso y Egreso -->
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Fecha</label>
+        <input class="form-input" type="date" id="f-fecha">
+      </div>
+      <div class="form-group">
+        <label class="form-label" id="f-monto-label">Monto ($)</label>
+        <input class="form-input" type="number" id="f-monto" placeholder="0" min="0" inputmode="numeric">
+      </div>
+    </div>
+
+    <!-- INGRESO: servicios → cliente → medio → nota → opcionales -->
     <div class="fields-block vis" id="blk-ingreso">
       <div class="form-group">
         <label class="form-label">Servicios de la sesión <span style="font-size:11px;color:var(--ink3);font-weight:400;">(uno o más)</span></label>
@@ -463,16 +475,6 @@ nav{height:var(--nav-h);background:var(--card);border-top:0.5px solid var(--bord
         <div class="autocomplete-wrap">
           <input class="form-input" id="f-cliente" placeholder="Nombre del cliente" autocomplete="off" oninput="acUpdate()" onfocus="acUpdate()">
           <div class="autocomplete-list" id="ac-list"></div>
-        </div>
-      </div>
-      <div class="form-row">
-        <div class="form-group">
-          <label class="form-label">Fecha</label>
-          <input class="form-input" type="date" id="f-fecha">
-        </div>
-        <div class="form-group">
-          <label class="form-label">Total sesión ($)</label>
-          <input class="form-input" type="number" id="f-monto" placeholder="0" min="0" inputmode="numeric">
         </div>
       </div>
       <div class="form-group">
@@ -498,7 +500,7 @@ nav{height:var(--nav-h);background:var(--card);border-top:0.5px solid var(--bord
       </div>
     </div>
 
-    <!-- EGRESO -->
+    <!-- EGRESO — igual que antes, sin cambios -->
     <div class="fields-block" id="blk-egreso">
       <div class="form-group">
         <label class="form-label">
@@ -1894,6 +1896,9 @@ function setTipo(t) {
   document.getElementById('btn-e').className = 'tgl-btn' + (t==='Egreso'?' sel-e':'');
   document.getElementById('blk-ingreso').className = 'fields-block' + (t==='Ingreso'?' vis':'');
   document.getElementById('blk-egreso').className = 'fields-block' + (t==='Egreso'?' vis':'');
+  // Actualizar label del monto según tipo
+  const lbl = document.getElementById('f-monto-label');
+  if (lbl) lbl.textContent = t === 'Ingreso' ? 'Total sesión ($)' : 'Monto ($)';
 }
 
 function toggleOpcionales(tipo) {
