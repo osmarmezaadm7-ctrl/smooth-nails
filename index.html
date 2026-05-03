@@ -1542,6 +1542,7 @@ function renderAgenda() {
         <div class="agenda-cliente">${escape(fullName(c))}${isHoy ? ' <span style="font-size:11px;background:var(--sage);color:white;padding:2px 7px;border-radius:20px;font-weight:600;">HOY</span>' : ''}</div>
         <div class="agenda-servicio">💅 ${escape(c.servicio || 'Servicio')}</div>
         ${hora ? `<div class="agenda-hora">🕐 ${hora}</div>` : ''}
+        ${c.dir_cita ? `<div style="font-size:11px;color:var(--ink3);margin-top:3px;">📍 ${escape(c.dir_cita)}</div>` : ''}
         ${c.tel ? `<div style="font-size:11px;color:var(--ink3);margin-top:3px;">📞 ${escape(c.tel)}</div>` : ''}
       </div>
       <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end;">
