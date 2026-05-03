@@ -845,7 +845,7 @@ function _renderSvcDropdown(ctx) {
     return;
   }
   list.innerHTML = disponibles.map(t =>
-    `<div class="svc-dropdown-item" onclick="_addSvc('${ctx}','${t.replace(/'/g,"\'")}')">${escape(t)}</div>`
+    `<div class="svc-dropdown-item" onclick="_addSvc('${ctx}','${t.replace(/'/g,"\'")}')">${escape(displaySvc(t))}</div>`
   ).join('');
 }
 
@@ -854,7 +854,7 @@ function _renderSvcChips(ctx) {
   if (!el) return;
   if (!_svcSels[ctx].length) { el.innerHTML = ''; return; }
   el.innerHTML = _svcSels[ctx].map(t =>
-    `<div class="svc-selected-chip">${escape(t)}<button type="button" onclick="_removeSvc('${ctx}','${t.replace(/'/g,"\'")}')">×</button></div>`
+    `<div class="svc-selected-chip">${escape(displaySvc(t))}<button type="button" onclick="_removeSvc('${ctx}','${t.replace(/'/g,"\'")}')">×</button></div>`
   ).join('');
 }
 
@@ -1067,6 +1067,12 @@ function esServicio(tipoNombre) {
   });
   return t.startsWith('servicio') || t.includes('servicio') || t === 'otro servicio';
 }
+// Nombre para mostrar en UI — omite el prefijo "Servicio " para mayor limpieza visual
+// El nombre original (con "Servicio") se conserva en Sheet y en toda la lógica interna
+function displaySvc(nombre) {
+  if (!nombre) return nombre;
+  return nombre.replace(/^servicio\s+/i, '').trim() || nombre;
+}
 function renderScreen(id) {
   if (id === 's-inicio') renderInicio();
   else if (id === 's-registros') renderRegistros();
@@ -1128,7 +1134,7 @@ function renderCitasHoy() {
         <div class="cita-notif-item">
           <div>
             <div style="font-size:14px;font-weight:500;color:var(--ink);">${escape(fullName(c))}</div>
-            <div style="font-size:11px;color:var(--ink3);">${escape(c.servicio||'Servicio')} — hoy</div>
+            <div style="font-size:11px;color:var(--ink3);">${escape(displaySvc(c.servicio)||'Servicio')} — hoy</div>
           </div>
           <div style="display:flex;gap:6px;align-items:center;">
             <button class="cita-notif-btn" onclick="enviarConfirmacionCita('${c.id}')">💬 Confirmar</button>
@@ -1296,7 +1302,7 @@ function renderInicio() {
   citasEl.innerHTML = upcoming.length
     ? upcoming.map(c => `<div class="tx-item" style="cursor:pointer" onclick="verCliente('${c.id}')">
         <div class="tx-icon i" style="background:var(--gold-l);font-size:16px;">📅</div>
-        <div class="tx-info"><div class="tx-name">${escape(fullName(c))}</div><div class="tx-meta">${fmtDLong(c._pcitaISO)} · ${escape(c.servicio||'Servicio')}</div></div>
+        <div class="tx-info"><div class="tx-name">${escape(fullName(c))}</div><div class="tx-meta">${fmtDLong(c._pcitaISO)} · ${escape(displaySvc(c.servicio)||'Servicio')}</div></div>
         <div style="font-size:11px;color:var(--gold);font-weight:600;">${fmtD(c._pcitaISO)}</div>
       </div>`).join('')
     : '<div class="empty"><div class="empty-icon">📅</div><div class="empty-text">Sin citas próximas agendadas</div></div>';
@@ -1336,7 +1342,7 @@ function renderTxList(id, items) {
   if (!items.length) { el.innerHTML = '<div class="empty"><div class="empty-icon">💅</div><div class="empty-text">Sin movimientos aún.<br>¡Registra tu primer servicio!</div></div>'; return; }
   el.innerHTML = items.map(t => {
     const isI = t.tipo === 'Ingreso';
-    const label = escape(isI ? (t.tipo_nombre||t.tipoI||'Ingreso') : (t.tipo_nombre||t.tipoE||'Egreso'));
+    const label = isI ? escape(displaySvc(t.tipo_nombre||t.tipoI)||'Ingreso') : escape(t.tipo_nombre||t.tipoE||'Egreso');
     const meta = isI
       ? [t.cliente, t.nota||t.obs].filter(Boolean).map(escape).join(' · ')
       : [(t.proveedor), t.nota||t.obs].filter(Boolean).map(escape).join(' · ');
@@ -1383,7 +1389,7 @@ function renderClientes() {
           <span class="client-name">${escape(fullName(c))}</span>
           ${isBday ? '<span class="birthday-badge">🎂 Cumple hoy</span>' : ''}
         </div>
-        <div class="client-meta">${svcCount} servicio${svcCount!==1?'s':''} · ${escape(c.servicio||'Sin servicio fijo')}${c.tel?' · '+escape(c.tel):''}</div>
+        <div class="client-meta">${svcCount} servicio${svcCount!==1?'s':''} · ${escape(displaySvc(c.servicio)||'Sin servicio fijo')}${c.tel?' · '+escape(c.tel):''}</div>
       </div>
       ${hasCita && pcitaISO ? `<span class="client-badge cita">📅 ${fmtD(pcitaISO)}</span>` : ''}
     </div>`;
@@ -1443,7 +1449,7 @@ async function verCliente(id) {
       })()}
     </div>
     <div class="section"><div class="card">
-      <div class="info-row"><span class="info-key">Servicio favorito</span><span class="info-val">${escape(c.servicio||'—')}</span></div>
+      <div class="info-row"><span class="info-key">Servicio favorito</span><span class="info-val">${escape(displaySvc(c.servicio)||'—')}</span></div>
       ${c.bday && fmtDLong(c.bday) ? `<div class="info-row"><span class="info-key">Cumpleaños</span><span class="info-val">🎂 ${fmtBday(c.bday)}</span></div>` : ''}
       <div class="info-row"><span class="info-key">Próxima cita</span><span class="info-val">${c.pcita?'📅 '+fmtDLong(c.pcita):'Sin agendar'}</span></div>
       <div class="info-row"><span class="info-key">Total facturado</span><span class="info-val" style="color:var(--sage)">${fmt(total)}</span></div>
@@ -1471,7 +1477,7 @@ async function verCliente(id) {
       <div class="card" style="padding:4px 14px;">
         ${historial.length ? historial.map(t=>`<div class="tx-item">
           <div class="tx-icon i">💅</div>
-          <div class="tx-info"><div class="tx-name">${escape(t.tipo_nombre||t.tipoI||'Servicio')}</div><div class="tx-meta">${fmtD(t.fecha)}${(t.nota||t.obs)?' · '+escape(t.nota||t.obs):''}</div></div>
+          <div class="tx-info"><div class="tx-name">${escape(displaySvc(t.tipo_nombre||t.tipoI)||'Servicio')}</div><div class="tx-meta">${fmtD(t.fecha)}${(t.nota||t.obs)?' · '+escape(t.nota||t.obs):''}</div></div>
           <div class="tx-amount i">+${fmt(t.monto)}</div>
         </div>`).join('')
         : '<div class="empty"><div class="empty-text">Sin servicios registrados aún</div></div>'}
@@ -1637,7 +1643,7 @@ function renderAgenda() {
       </div>
       <div class="agenda-info">
         <div class="agenda-cliente">${escape(fullName(c))}${isHoy ? ' <span style="font-size:11px;background:var(--sage);color:white;padding:2px 7px;border-radius:20px;font-weight:600;">HOY</span>' : ''}</div>
-        <div class="agenda-servicio">💅 ${escape(c.servicio || 'Servicio')}</div>
+        <div class="agenda-servicio">💅 ${escape(displaySvc(c.servicio) || 'Servicio')}</div>
         ${hora ? `<div class="agenda-hora">🕐 ${hora}</div>` : ''}
         ${c.dir_cita ? `<div style="font-size:11px;color:var(--ink3);margin-top:3px;">📍 ${escape(c.dir_cita)}</div>` : ''}
         ${c.tel ? `<div style="font-size:11px;color:var(--ink3);margin-top:3px;">📞 ${escape(c.tel)}</div>` : ''}
