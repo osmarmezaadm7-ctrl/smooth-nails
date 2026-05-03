@@ -252,11 +252,20 @@ nav{height:var(--nav-h);background:var(--card);border-top:0.5px solid var(--bord
 .bday-notif-item:last-child{border-bottom:none;padding-bottom:0;}
 .bday-notif-name{font-size:14px;font-weight:500;color:var(--ink);}
 .bday-notif-btn{padding:7px 12px;background:var(--gold);color:white;border:none;border-radius:20px;font-size:12px;font-weight:600;font-family:var(--ff);cursor:pointer;white-space:nowrap;flex-shrink:0;}
-/* MULTI-SELECTOR DE SERVICIOS */
-.svc-chips{display:flex;flex-wrap:wrap;gap:7px;padding:4px 0 2px;}
-.svc-chip{padding:7px 13px;border-radius:20px;border:1.5px solid var(--border2);background:var(--card);font-size:13px;font-weight:500;font-family:var(--ff);cursor:pointer;color:var(--ink3);transition:all .15s;user-select:none;-webkit-user-select:none;}
-.svc-chip.sel{background:var(--rose-l);border-color:var(--rose);color:var(--rose-d);font-weight:600;}
-.svc-chips-empty{font-size:12px;color:var(--ink3);padding:6px 0;}
+/* MULTI-SELECTOR DE SERVICIOS — dropdown + chips */
+.svc-dropdown-wrap{position:relative;}
+.svc-dropdown-btn{width:100%;padding:11px 14px;border:1.5px solid var(--border2);border-radius:12px;background:var(--card);color:var(--ink3);font-size:14px;font-family:var(--ff);text-align:left;cursor:pointer;display:flex;align-items:center;justify-content:space-between;}
+.svc-dropdown-btn:focus{outline:none;border-color:var(--rose);}
+.svc-dropdown-list{display:none;position:absolute;top:calc(100% + 4px);left:0;right:0;background:var(--card);border:1.5px solid var(--border2);border-radius:12px;z-index:200;box-shadow:0 6px 24px rgba(0,0,0,.12);max-height:220px;overflow-y:auto;}
+.svc-dropdown-list.open{display:block;}
+.svc-dropdown-item{padding:11px 14px;font-size:14px;font-family:var(--ff);color:var(--ink);cursor:pointer;border-bottom:0.5px solid var(--border);}
+.svc-dropdown-item:last-child{border-bottom:none;}
+.svc-dropdown-item:hover{background:var(--rose-l);}
+.svc-dropdown-item.used{color:var(--ink3);pointer-events:none;}
+.svc-selected-chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;min-height:0;}
+.svc-selected-chip{display:inline-flex;align-items:center;gap:5px;padding:5px 10px 5px 12px;border-radius:20px;background:var(--rose-l);border:1.5px solid var(--rose);color:var(--rose-d);font-size:13px;font-weight:600;font-family:var(--ff);}
+.svc-selected-chip button{width:18px;height:18px;border-radius:50%;background:var(--rose);color:white;border:none;font-size:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;line-height:1;padding:0;}
+.svc-chips-empty{font-size:12px;color:var(--ink3);padding:4px 0;}
 </style>
 </head>
 <body>
@@ -440,7 +449,14 @@ nav{height:var(--nav-h);background:var(--card);border-top:0.5px solid var(--bord
     <div class="fields-block vis" id="blk-ingreso">
       <div class="form-group">
         <label class="form-label">Servicios de la sesión <span style="font-size:11px;color:var(--ink3);font-weight:400;">(uno o más)</span></label>
-        <div class="svc-chips" id="f-svc-chips-reg"><div class="svc-chips-empty">Cargando servicios...</div></div>
+        <div class="svc-dropdown-wrap" id="svc-wrap-reg">
+          <button type="button" class="svc-dropdown-btn" id="svc-btn-reg" onclick="_toggleSvcDropdown('reg')">
+            <span>Seleccionar servicio...</span>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+          </button>
+          <div class="svc-dropdown-list" id="svc-list-reg"></div>
+        </div>
+        <div class="svc-selected-chips" id="svc-chips-reg"></div>
       </div>
       <div class="form-group">
         <label class="form-label">Cliente</label>
@@ -584,7 +600,14 @@ nav{height:var(--nav-h);background:var(--card);border-top:0.5px solid var(--bord
 
     <div class="form-group">
       <label class="form-label">Servicios de la sesión <span style="font-size:11px;color:var(--ink3);font-weight:400;">(uno o más)</span></label>
-      <div class="svc-chips" id="ag-svc-chips"><div class="svc-chips-empty">Cargando servicios...</div></div>
+      <div class="svc-dropdown-wrap" id="svc-wrap-ag">
+        <button type="button" class="svc-dropdown-btn" id="svc-btn-ag" onclick="_toggleSvcDropdown('ag')">
+          <span>Seleccionar servicio...</span>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div class="svc-dropdown-list" id="svc-list-ag"></div>
+      </div>
+      <div class="svc-selected-chips" id="svc-chips-ag"></div>
     </div>
     <div class="form-row">
       <div class="form-group">
@@ -795,41 +818,80 @@ function fillTiposSelect() {
   const selCli = document.getElementById('cl-servicio');
   selE.innerHTML = tiposEgreso.map(t => `<option value="${t}">${t}</option>`).join('');
   selCli.innerHTML = '<option value="">Sin especificar</option>' + tiposIngreso.filter(t => t.startsWith('Servicio')).map(t => `<option value="${t}">${t}</option>`).join('');
-  // Poblar chips de registro y agenda con tipos de servicio
-  _renderChips('f-svc-chips-reg', tiposIngreso, []);
-  _renderChips('ag-svc-chips', tiposIngreso.filter(t => esServicio(t)), []);
+  // Inicializar selectores de servicio
+  _initSvcSelector('reg', tiposIngreso, []);
+  _initSvcSelector('ag', tiposIngreso.filter(t => esServicio(t)), []);
 }
 
-// ── Multi-selector de servicios ──
-// selectedSvcs: objeto {containerId: Set}
-const _svcSels = {};
+// ── Multi-selector de servicios — dropdown + chips ──
+// Estado: { reg: ['Svc1','Svc2'], ag: ['Svc1'] }
+const _svcSels = { reg: [], ag: [] };
+// Tipos disponibles por contexto
+const _svcTipos = { reg: [], ag: [] };
 
-function _renderChips(containerId, tipos, preselected) {
-  const el = document.getElementById(containerId);
-  if (!el) return;
-  if (!_svcSels[containerId]) _svcSels[containerId] = new Set(preselected);
-  else { _svcSels[containerId] = new Set(preselected); }
-  if (!tipos.length) { el.innerHTML = '<div class="svc-chips-empty">Sin servicios configurados</div>'; return; }
-  el.innerHTML = tipos.map(t => {
-    const sel = _svcSels[containerId].has(t);
-    return `<button type="button" class="svc-chip${sel?' sel':''}" onclick="_toggleChip('${containerId}','${t.replace(/'/g,"\'")}',this)">${escape(t)}</button>`;
-  }).join('');
+function _initSvcSelector(ctx, tipos, preselected) {
+  _svcTipos[ctx] = tipos;
+  _svcSels[ctx] = [...preselected];
+  _renderSvcDropdown(ctx);
+  _renderSvcChips(ctx);
 }
 
-function _toggleChip(containerId, tipo, btn) {
-  if (!_svcSels[containerId]) _svcSels[containerId] = new Set();
-  if (_svcSels[containerId].has(tipo)) {
-    _svcSels[containerId].delete(tipo);
-    btn.classList.remove('sel');
-  } else {
-    _svcSels[containerId].add(tipo);
-    btn.classList.add('sel');
+function _renderSvcDropdown(ctx) {
+  const list = document.getElementById('svc-list-' + ctx);
+  if (!list) return;
+  const disponibles = _svcTipos[ctx].filter(t => !_svcSels[ctx].includes(t));
+  if (!disponibles.length) {
+    list.innerHTML = '<div class="svc-dropdown-item used">Todos los servicios seleccionados</div>';
+    return;
   }
+  list.innerHTML = disponibles.map(t =>
+    `<div class="svc-dropdown-item" onclick="_addSvc('${ctx}','${t.replace(/'/g,"\'")}')">${escape(t)}</div>`
+  ).join('');
+}
+
+function _renderSvcChips(ctx) {
+  const el = document.getElementById('svc-chips-' + ctx);
+  if (!el) return;
+  if (!_svcSels[ctx].length) { el.innerHTML = ''; return; }
+  el.innerHTML = _svcSels[ctx].map(t =>
+    `<div class="svc-selected-chip">${escape(t)}<button type="button" onclick="_removeSvc('${ctx}','${t.replace(/'/g,"\'")}')">×</button></div>`
+  ).join('');
+}
+
+function _toggleSvcDropdown(ctx) {
+  const list = document.getElementById('svc-list-' + ctx);
+  if (!list) return;
+  const isOpen = list.classList.contains('open');
+  // Cerrar todos los dropdowns abiertos
+  document.querySelectorAll('.svc-dropdown-list.open').forEach(el => el.classList.remove('open'));
+  if (!isOpen) { _renderSvcDropdown(ctx); list.classList.add('open'); }
+}
+
+function _addSvc(ctx, tipo) {
+  if (!_svcSels[ctx].includes(tipo)) _svcSels[ctx].push(tipo);
+  document.getElementById('svc-list-' + ctx).classList.remove('open');
+  _renderSvcDropdown(ctx);
+  _renderSvcChips(ctx);
+}
+
+function _removeSvc(ctx, tipo) {
+  _svcSels[ctx] = _svcSels[ctx].filter(t => t !== tipo);
+  _renderSvcDropdown(ctx);
+  _renderSvcChips(ctx);
 }
 
 function _getSelectedSvcs(containerId) {
-  return _svcSels[containerId] ? [..._svcSels[containerId]] : [];
+  // containerId puede ser 'f-svc-chips-reg'→'reg' o 'ag-svc-chips'→'ag'
+  const ctx = containerId.includes('ag') ? 'ag' : 'reg';
+  return [..._svcSels[ctx]];
 }
+
+// Cerrar dropdown al hacer click fuera
+document.addEventListener('click', e => {
+  if (!e.target.closest('.svc-dropdown-wrap')) {
+    document.querySelectorAll('.svc-dropdown-list.open').forEach(el => el.classList.remove('open'));
+  }
+});
 
 // ── getDashboard: obtiene resumen desde Sheet ──
 async function getDashboard() {
@@ -1802,8 +1864,8 @@ function openRegistro() {
   document.getElementById('opt-toggle-i').classList.remove('open');
   document.getElementById('opt-fields-e').classList.remove('open');
   document.getElementById('opt-toggle-e').classList.remove('open');
-  // Limpiar chips de servicios
-  _renderChips('f-svc-chips-reg', tiposIngreso, []);
+  // Limpiar selector de servicios
+  _initSvcSelector('reg', tiposIngreso, []);
   setTipo('Ingreso');
   document.getElementById('modal-registro').classList.add('open');
   setTimeout(() => document.getElementById('f-monto').focus(), 300);
@@ -1817,9 +1879,7 @@ function openRegistroCliente(id) {
     el.value = fullName(c);
     el.dataset.selectedId = id; // viene de perfil de cliente, ya está seleccionado
   }
-  if (c?.servicio) {
-    _renderChips('f-svc-chips-reg', tiposIngreso, [c.servicio]);
-  }
+  _initSvcSelector('reg', tiposIngreso, c?.servicio ? [c.servicio] : []);
 }
 
 function setTipo(t) {
@@ -2362,10 +2422,10 @@ function openAgendarCita(id, isReagendar = false) {
   document.querySelector('#modal-agendar .modal-title').textContent = isReagendar ? 'Reagendar cita' : 'Agendar cita';
   document.getElementById('agendar-cliente-nombre').textContent = 'Para ' + fullName(c);
 
-  // Poblar chips de servicio con servicio favorito preseleccionado
+  // Inicializar selector de servicios con favorito preseleccionado
   const svcsAgenda = tiposIngreso.filter(t => esServicio(t));
-  const presel = c.servicio && svcsAgenda.includes(c.servicio) ? [c.servicio] : (svcsAgenda.length ? [svcsAgenda[0]] : []);
-  _renderChips('ag-svc-chips', svcsAgenda, presel);
+  const presel = c.servicio && svcsAgenda.includes(c.servicio) ? [c.servicio] : [];
+  _initSvcSelector('ag', svcsAgenda, presel);
 
   // Si es reagendar, precargar fecha existente; si no, mañana
   if (isReagendar && c.pcita) {
