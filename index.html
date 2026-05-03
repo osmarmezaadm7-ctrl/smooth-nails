@@ -252,6 +252,11 @@ nav{height:var(--nav-h);background:var(--card);border-top:0.5px solid var(--bord
 .bday-notif-item:last-child{border-bottom:none;padding-bottom:0;}
 .bday-notif-name{font-size:14px;font-weight:500;color:var(--ink);}
 .bday-notif-btn{padding:7px 12px;background:var(--gold);color:white;border:none;border-radius:20px;font-size:12px;font-weight:600;font-family:var(--ff);cursor:pointer;white-space:nowrap;flex-shrink:0;}
+/* MULTI-SELECTOR DE SERVICIOS */
+.svc-chips{display:flex;flex-wrap:wrap;gap:7px;padding:4px 0 2px;}
+.svc-chip{padding:7px 13px;border-radius:20px;border:1.5px solid var(--border2);background:var(--card);font-size:13px;font-weight:500;font-family:var(--ff);cursor:pointer;color:var(--ink3);transition:all .15s;user-select:none;-webkit-user-select:none;}
+.svc-chip.sel{background:var(--rose-l);border-color:var(--rose);color:var(--rose-d);font-weight:600;}
+.svc-chips-empty{font-size:12px;color:var(--ink3);padding:6px 0;}
 </style>
 </head>
 <body>
@@ -283,7 +288,7 @@ nav{height:var(--nav-h);background:var(--card);border-top:0.5px solid var(--bord
       <div class="bh-row">
         <div class="bh-mini"><div class="bh-mini-label">Ingresos</div><div class="bh-mini-val" id="bh-ing">$0</div></div>
         <div class="bh-mini"><div class="bh-mini-label">Egresos</div><div class="bh-mini-val" id="bh-egr">$0</div></div>
-        <div class="bh-mini"><div class="bh-mini-label">Servicios</div><div class="bh-mini-val" id="bh-svc">0</div></div>
+        <div class="bh-mini"><div class="bh-mini-label">Sesiones</div><div class="bh-mini-val" id="bh-svc">0</div></div>
       </div>
       <div style="margin-top:10px;position:relative;z-index:1;display:flex;align-items:center;justify-content:space-between;">
         <div style="font-size:11px;color:rgba(255,255,255,.75);">Saldo acumulado total</div>
@@ -430,28 +435,12 @@ nav{height:var(--nav-h);background:var(--card);border-top:0.5px solid var(--bord
       <button class="tgl-btn sel-i" id="btn-i" onclick="setTipo('Ingreso')">💅 Ingreso</button>
       <button class="tgl-btn" id="btn-e" onclick="setTipo('Egreso')">🛒 Egreso</button>
     </div>
-    <div class="form-row">
-      <div class="form-group">
-        <label class="form-label">Fecha</label>
-        <input class="form-input" type="date" id="f-fecha">
-      </div>
-      <div class="form-group">
-        <label class="form-label">Monto ($)</label>
-        <input class="form-input" type="number" id="f-monto" placeholder="0" min="0" inputmode="numeric">
-      </div>
-    </div>
 
-    <!-- INGRESO: solo 4 campos esenciales -->
+    <!-- INGRESO: flujo lógico — servicios → cliente → monto → medio → nota → opcionales -->
     <div class="fields-block vis" id="blk-ingreso">
       <div class="form-group">
-        <label class="form-label">
-          Tipo de servicio
-          <div class="tooltip-wrap">
-            <button class="help-btn" onclick="toggleTooltip('tt-tipo-i', this)">?</button>
-            <div class="tooltip" id="tt-tipo-i"></div>
-          </div>
-        </label>
-        <select class="form-select" id="f-tipo-i" onchange="updateTooltipTipoI()"></select>
+        <label class="form-label">Servicios de la sesión <span style="font-size:11px;color:var(--ink3);font-weight:400;">(uno o más)</span></label>
+        <div class="svc-chips" id="f-svc-chips-reg"><div class="svc-chips-empty">Cargando servicios...</div></div>
       </div>
       <div class="form-group">
         <label class="form-label">Cliente</label>
@@ -460,11 +449,25 @@ nav{height:var(--nav-h);background:var(--card);border-top:0.5px solid var(--bord
           <div class="autocomplete-list" id="ac-list"></div>
         </div>
       </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Fecha</label>
+          <input class="form-input" type="date" id="f-fecha">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Total sesión ($)</label>
+          <input class="form-input" type="number" id="f-monto" placeholder="0" min="0" inputmode="numeric">
+        </div>
+      </div>
       <div class="form-group">
         <label class="form-label">Medio de pago</label>
         <select class="form-select" id="f-medio-i">
           <option>Efectivo</option><option>Transferencia</option><option>Débito</option>
         </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Notas / observaciones <span style="font-size:11px;color:var(--ink3);font-weight:400;">(opcional)</span></label>
+        <input class="form-input" id="f-obs-i" placeholder="Ej: nail art, diseño especial...">
       </div>
       <!-- Campos opcionales colapsados -->
       <div class="optional-toggle" id="opt-toggle-i" onclick="toggleOpcionales('i')">
@@ -472,15 +475,9 @@ nav{height:var(--nav-h);background:var(--card);border-top:0.5px solid var(--bord
         <span>Más detalles (opcional)</span>
       </div>
       <div class="optional-fields" id="opt-fields-i">
-        <div class="form-row">
-          <div class="form-group">
-            <label class="form-label">Próxima cita</label>
-            <input class="form-input" type="date" id="f-pcita">
-          </div>
-          <div class="form-group">
-            <label class="form-label">Nota</label>
-            <input class="form-input" id="f-obs-i" placeholder="Ej: nail art...">
-          </div>
+        <div class="form-group">
+          <label class="form-label">Próxima cita</label>
+          <input class="form-input" type="date" id="f-pcita">
         </div>
       </div>
     </div>
@@ -586,8 +583,8 @@ nav{height:var(--nav-h);background:var(--card);border-top:0.5px solid var(--bord
     <div class="modal-sub" id="agendar-cliente-nombre">Para el cliente</div>
 
     <div class="form-group">
-      <label class="form-label">Tipo de servicio</label>
-      <select class="form-select" id="ag-servicio"></select>
+      <label class="form-label">Servicios de la sesión <span style="font-size:11px;color:var(--ink3);font-weight:400;">(uno o más)</span></label>
+      <div class="svc-chips" id="ag-svc-chips"><div class="svc-chips-empty">Cargando servicios...</div></div>
     </div>
     <div class="form-row">
       <div class="form-group">
@@ -793,12 +790,45 @@ async function getTipos() {
 }
 
 function fillTiposSelect() {
-  const selI = document.getElementById('f-tipo-i');
+  // f-tipo-i ya no existe (reemplazado por chips) — solo poblar egreso y servicio favorito
   const selE = document.getElementById('f-tipo-e');
   const selCli = document.getElementById('cl-servicio');
-  selI.innerHTML = tiposIngreso.map(t => `<option value="${t}">${t}</option>`).join('');
   selE.innerHTML = tiposEgreso.map(t => `<option value="${t}">${t}</option>`).join('');
   selCli.innerHTML = '<option value="">Sin especificar</option>' + tiposIngreso.filter(t => t.startsWith('Servicio')).map(t => `<option value="${t}">${t}</option>`).join('');
+  // Poblar chips de registro y agenda con tipos de servicio
+  _renderChips('f-svc-chips-reg', tiposIngreso, []);
+  _renderChips('ag-svc-chips', tiposIngreso.filter(t => esServicio(t)), []);
+}
+
+// ── Multi-selector de servicios ──
+// selectedSvcs: objeto {containerId: Set}
+const _svcSels = {};
+
+function _renderChips(containerId, tipos, preselected) {
+  const el = document.getElementById(containerId);
+  if (!el) return;
+  if (!_svcSels[containerId]) _svcSels[containerId] = new Set(preselected);
+  else { _svcSels[containerId] = new Set(preselected); }
+  if (!tipos.length) { el.innerHTML = '<div class="svc-chips-empty">Sin servicios configurados</div>'; return; }
+  el.innerHTML = tipos.map(t => {
+    const sel = _svcSels[containerId].has(t);
+    return `<button type="button" class="svc-chip${sel?' sel':''}" onclick="_toggleChip('${containerId}','${t.replace(/'/g,"\'")}',this)">${escape(t)}</button>`;
+  }).join('');
+}
+
+function _toggleChip(containerId, tipo, btn) {
+  if (!_svcSels[containerId]) _svcSels[containerId] = new Set();
+  if (_svcSels[containerId].has(tipo)) {
+    _svcSels[containerId].delete(tipo);
+    btn.classList.remove('sel');
+  } else {
+    _svcSels[containerId].add(tipo);
+    btn.classList.add('sel');
+  }
+}
+
+function _getSelectedSvcs(containerId) {
+  return _svcSels[containerId] ? [..._svcSels[containerId]] : [];
 }
 
 // ── getDashboard: obtiene resumen desde Sheet ──
@@ -968,6 +998,11 @@ document.getElementById('fab-btn').addEventListener('click', () => {
 function esServicio(tipoNombre) {
   if (!tipoNombre) return false;
   const t = tipoNombre.toLowerCase();
+  // Si es multi-servicio (contiene coma), es sesión si al menos uno es servicio
+  if (t.includes(',')) return t.split(',').some(p => {
+    const p2 = p.trim();
+    return p2.startsWith('servicio') || p2.includes('servicio') || p2 === 'otro servicio';
+  });
   return t.startsWith('servicio') || t.includes('servicio') || t === 'otro servicio';
 }
 function renderScreen(id) {
@@ -1767,6 +1802,8 @@ function openRegistro() {
   document.getElementById('opt-toggle-i').classList.remove('open');
   document.getElementById('opt-fields-e').classList.remove('open');
   document.getElementById('opt-toggle-e').classList.remove('open');
+  // Limpiar chips de servicios
+  _renderChips('f-svc-chips-reg', tiposIngreso, []);
   setTipo('Ingreso');
   document.getElementById('modal-registro').classList.add('open');
   setTimeout(() => document.getElementById('f-monto').focus(), 300);
@@ -1780,7 +1817,9 @@ function openRegistroCliente(id) {
     el.value = fullName(c);
     el.dataset.selectedId = id; // viene de perfil de cliente, ya está seleccionado
   }
-  if (c?.servicio) { document.getElementById('f-tipo-i').value = c.servicio; }
+  if (c?.servicio) {
+    _renderChips('f-svc-chips-reg', tiposIngreso, [c.servicio]);
+  }
 }
 
 function setTipo(t) {
@@ -1813,9 +1852,7 @@ function toggleTooltip(id) {
 }
 
 function updateTooltipTipoI() {
-  const v = document.getElementById('f-tipo-i').value;
-  const tt = document.getElementById('tt-tipo-i');
-  tt.textContent = DESCRIPCIONES_TIPO[v] || '';
+  // No-op: el selector de tipo fue reemplazado por chips
 }
 function updateTooltipTipoE() {
   const v = document.getElementById('f-tipo-e').value;
@@ -1860,8 +1897,9 @@ async function guardarMovimiento() {
 
   // Si es servicio, el cliente es obligatorio
   if (currentTipo === 'Ingreso' && !_skipClienteValidation) {
-    const tipoSel = document.getElementById('f-tipo-i').value;
-    if (esServicio(tipoSel)) {
+    const svcsSelReg = _getSelectedSvcs('f-svc-chips-reg');
+    const tipoSel = svcsSelReg.length > 0 ? svcsSelReg[0] : '';
+    if (svcsSelReg.length === 0 || esServicio(tipoSel)) {
       const nombreCliente = document.getElementById('f-cliente').value.trim();
 
       // Caso 1: campo vacío
@@ -1899,10 +1937,16 @@ async function guardarMovimiento() {
   _skipClienteValidation = false; // reset
   const rec = { id: Date.now(), tipo: currentTipo, fecha, monto };
   if (currentTipo === 'Ingreso') {
-    const tipoNombre = document.getElementById('f-tipo-i').value;
+    const svcsSelReg = _getSelectedSvcs('f-svc-chips-reg');
+    if (svcsSelReg.length === 0) {
+      mostrarErrorCliente('⚠️ Selecciona al menos un servicio.', null);
+      btn.disabled = false;
+      return;
+    }
+    const tipoNombre = svcsSelReg.join(', ');
     Object.assign(rec, {
       tipo_nombre: tipoNombre,
-      tipo_id: tipoNombre.toLowerCase().replace(/\s+/g, '_'),
+      tipo_id: svcsSelReg[0].toLowerCase().replace(/\s+/g, '_'),
       cliente: document.getElementById('f-cliente').value.trim(),
       medio_pago: document.getElementById('f-medio-i').value,
       nota: document.getElementById('f-obs-i').value.trim(),
@@ -2318,10 +2362,10 @@ function openAgendarCita(id, isReagendar = false) {
   document.querySelector('#modal-agendar .modal-title').textContent = isReagendar ? 'Reagendar cita' : 'Agendar cita';
   document.getElementById('agendar-cliente-nombre').textContent = 'Para ' + fullName(c);
 
-  // Poblar tipos de servicio
-  const sel = document.getElementById('ag-servicio');
-  sel.innerHTML = tiposIngreso.filter(t => esServicio(t)).map(t => `<option value="${t}">${t}</option>`).join('');
-  if (c.servicio) sel.value = c.servicio;
+  // Poblar chips de servicio con servicio favorito preseleccionado
+  const svcsAgenda = tiposIngreso.filter(t => esServicio(t));
+  const presel = c.servicio && svcsAgenda.includes(c.servicio) ? [c.servicio] : (svcsAgenda.length ? [svcsAgenda[0]] : []);
+  _renderChips('ag-svc-chips', svcsAgenda, presel);
 
   // Si es reagendar, precargar fecha existente; si no, mañana
   if (isReagendar && c.pcita) {
@@ -2375,11 +2419,12 @@ function setLugar(lugar) {
 async function confirmarCita() {
   const fecha = document.getElementById('ag-fecha').value;
   const hora  = document.getElementById('ag-hora').value;
-  const svc   = document.getElementById('ag-servicio').value;
+  const svcsAg = _getSelectedSvcs('ag-svc-chips');
+  const svc   = svcsAg.join(', ');
   const dir   = document.getElementById('ag-direccion').value;
 
-  if (!fecha || !hora || !svc) {
-    showStatus('ag-status', '⚠️ Por favor completa todos los campos', 'err');
+  if (!fecha || !hora || !svcsAg.length) {
+    showStatus('ag-status', '⚠️ Por favor completa todos los campos y selecciona al menos un servicio', 'err');
     return;
   }
   if (!_clienteActivo?.tel) {
